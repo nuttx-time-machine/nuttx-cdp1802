@@ -1,0 +1,357 @@
+From 2accc2d07343c7f8a7c0e4bf27b023ea3a7fd521 Mon Sep 17 00:00:00 2001
+From: Alan Carvalho de Assis <acassis@gmail.com>
+Date: Tue, 29 Sep 2026 13:12:46 -0300
+Subject: [PATCH] cdp1802: make stack pointer updates interrupt-safe
+
+The CDP1802 changes R2 (SP) one byte at a time with PLO and PHI.  An
+interrupt taken between the two writes enters the handler with X=2, and
+a standard COSMAC handler saves the interrupted context by pushing
+through R2 (RCA MPM-201A, Fig. 76).  The existing sequences can leave R2
+up to 256 bytes *above* the live stack top for a few instructions: frame
+allocation adds the low byte first, and loading SP from the frame
+pointer, another register, a constant or memory writes the high byte
+first.  A handler that interrupts there overwrites live stack frames.
+
+Emit sequences whose every intermediate value is at or below the live
+stack top, so that the handler's pushes land in free stack space:
+
+- SP += V (addhi3/subhi3 with a constant): for 0 <= V < 256 keep the
+  low-byte-first add; otherwise add the high byte first, then the low
+  byte with carry.
+- SP <- FP in the epilogue (new cdp1802_restore_sp_from_fp): SP <= FP
+  there, so write the low byte first.
+- SP <- register, constant or memory (direction unknown; memory loads
+  come from non-local exits such as libgcc's SJLJ unwinder): first move
+  SP one page below the new value, then write the low and the high byte.
+
+Intermediate values are below the new SP by less than 512 bytes, so a
+stack needs that much free space below its lowest SP (a "guard band"),
+and no stack may live in page 0x00, where the arithmetic would wrap.
+All other writes to R2 are single instructions (INC, DEC, STXD, LDA,
+LDXA, IRX, OUT, RET, DIS).
+
+Generated-by: Claude Opus 5.5 (claude-opus-5-5) via Claude Code
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Signed-off-by: Alan Carvalho de Assis <acassis@gmail.com>
+---
+ gcc/config/cdp1802/cdp1802-protos.h |   6 ++
+ gcc/config/cdp1802/cdp1802.cc       | 137 +++++++++++++++++++++++++++-
+ gcc/config/cdp1802/cdp1802.md       |  59 +++++++-----
+ 3 files changed, 177 insertions(+), 25 deletions(-)
+
+diff --git a/gcc/config/cdp1802/cdp1802-protos.h b/gcc/config/cdp1802/cdp1802-protos.h
+index 65b7ccc74..cc7edb747 100644
+--- a/gcc/config/cdp1802/cdp1802-protos.h
++++ b/gcc/config/cdp1802/cdp1802-protos.h
+@@ -44,6 +44,12 @@ extern poly_int64 cdp1802_push_rounding (poly_int64);
+ extern bool cdp1802_regno_ok_for_base_p (int);
+ extern enum reg_class cdp1802_regno_reg_class (int);
+ extern const char *cdp1802_template_incdec (bool, rtx);
++extern bool cdp1802_sp_reg_p (rtx);
++extern const char *cdp1802_template_addhi3_imm (bool, rtx *);
++extern int cdp1802_length_addhi3_imm (bool, rtx *);
++extern const char *cdp1802_template_movhi_r_r (rtx);
++extern const char *cdp1802_template_movhi_r_i (rtx);
++extern const char *cdp1802_template_movhi_r_m (rtx, rtx, char, const char *);
+ extern const char *cdp1802_template_movdf_r_r (rtx, rtx);
+ extern const char *cdp1802_template_movsf_r_r (rtx, rtx);
+ 
+diff --git a/gcc/config/cdp1802/cdp1802.cc b/gcc/config/cdp1802/cdp1802.cc
+index a0ad14233..938f98df9 100644
+--- a/gcc/config/cdp1802/cdp1802.cc
++++ b/gcc/config/cdp1802/cdp1802.cc
+@@ -952,6 +952,139 @@ cdp1802_template_incdec (bool add_p, rtx amount)
+   return (add_p ? incs : decs) + (7 * 8) - (aval * 8);
+ }
+ 
++/* Interrupt-safe updates of the stack pointer.
++
++   The CDP1802 cannot write a 16-bit register in one instruction: R2 (SP) is
++   changed one byte at a time with PLO and PHI.  An interrupt taken between
++   the two writes enters the handler with X=2, and a standard handler saves
++   the context by pushing through R2 (RCA MPM-201A, Fig. 76).  Every
++   intermediate value of R2 must therefore be at or below the live stack
++   top, so that the handler's pushes land in free stack space and never in a
++   live frame.  The sequences below guarantee that each intermediate value
++   is below both the old and the new SP, by less than 512 bytes (the stack
++   "guard band"), provided no stack lives in the lowest 256-byte page, where
++   the arithmetic would wrap.  */
++
++bool
++cdp1802_sp_reg_p (rtx x)
++{
++  return REG_P (x) && REGNO (x) == STACK_POINTER_REGNUM;
++}
++
++/* Split the constant added to SP by an addhi3 (ADD_P) or subhi3 insn into
++   the high and low bytes of the 16-bit two's complement addend.  */
++
++static void
++cdp1802_sp_addend (bool add_p, rtx amount, int *hi, int *lo)
++{
++  unsigned int v = (unsigned int) (add_p ? INTVAL (amount) : -INTVAL (amount));
++
++  *hi = (v >> 8) & 0xff;
++  *lo = v & 0xff;
++}
++
++/* Worker function for the immediate alternative of addhi3 and subhi3.
++
++   For SP += V (V = HI * 256 + LO, modulo 65536):
++   - 0 <= V < 256: add LO to the low byte first, then propagate the carry;
++     the intermediate value is the final one or 256 below it;
++   - LO == 0: a single PHI;
++   - otherwise add HI to the high byte first (the intermediate value is the
++     final one minus LO), then add LO as above.  */
++
++const char *
++cdp1802_template_addhi3_imm (bool add_p, rtx *operands)
++{
++  static char buf[128];
++  int hi, lo;
++
++  if (!cdp1802_sp_reg_p (operands[0]))
++    return (add_p
++	    ? "glo %1\n\tadi %L2\n\tplo %0\n\tghi %1\n\tadci %H2\n\tphi %0"
++	    : "glo %1\n\tsmi %L2\n\tplo %0\n\tghi %1\n\tsmbi %H2\n\tphi %0");
++
++  cdp1802_sp_addend (add_p, operands[2], &hi, &lo);
++  if (hi == 0)
++    snprintf (buf, sizeof buf,
++	      "glo 2\n\tadi 0x%02x\n\tplo 2\n\tghi 2\n\tadci 0\n\tphi 2", lo);
++  else if (lo == 0)
++    snprintf (buf, sizeof buf, "ghi 2\n\tadi 0x%02x\n\tphi 2", hi);
++  else
++    snprintf (buf, sizeof buf,
++	      "ghi 2\n\tadi 0x%02x\n\tphi 2\n\t"
++	      "glo 2\n\tadi 0x%02x\n\tplo 2\n\tghi 2\n\tadci 0\n\tphi 2", hi, lo);
++  return buf;
++}
++
++/* Length of the above.  */
++
++int
++cdp1802_length_addhi3_imm (bool add_p, rtx *operands)
++{
++  int hi, lo;
++
++  if (!cdp1802_sp_reg_p (operands[0]))
++    return 8;
++  cdp1802_sp_addend (add_p, operands[2], &hi, &lo);
++  return hi == 0 ? 8 : lo == 0 ? 4 : 12;
++}
++
++/* Worker function for the register-to-register alternative of movhi.
++   When the destination is SP and the direction of the change is unknown,
++   first make SP point one page below the new value (keeping the old low
++   byte), then write the low byte and finally the high byte.  Every
++   intermediate value is below the new SP.  */
++
++const char *
++cdp1802_template_movhi_r_r (rtx dst)
++{
++  if (cdp1802_sp_reg_p (dst))
++    return "ghi %1\n\tsmi 1\n\tphi %0\n\tglo %1\n\tplo %0\n\tghi %1\n\tphi %0";
++  return "ghi %1\n\tphi %0\n\tglo %1\n\tplo %0";
++}
++
++/* Worker function for the immediate alternative of movhi; as above.  */
++
++const char *
++cdp1802_template_movhi_r_i (rtx dst)
++{
++  if (cdp1802_sp_reg_p (dst))
++    return "ldi %H1\n\tsmi 1\n\tphi %0\n\tldi %L1\n\tplo %0\n\tldi %H1\n\tphi %0";
++  return "ldi %H1\n\tphi %0\n\tldi %L1\n\tplo %0";
++}
++
++/* Worker function for the memory-to-register alternatives of movhi
++   (KIND 'S': post-increment, 'T': post-decrement, 'm': plain; TEMPL is the
++   ordinary sequence).  Loading SP from memory happens in non-local exits,
++   e.g. libgcc's SJLJ unwinder.  As above, first make SP point one page
++   below the new value, then write the low and the high byte; the pointer
++   register ends where the ordinary sequence leaves it.  */
++
++const char *
++cdp1802_template_movhi_r_m (rtx dst, rtx src, char kind, const char *templ)
++{
++  if (!cdp1802_sp_reg_p (dst))
++    return templ;
++
++  /* The address is (post_inc R), (post_dec R) or R.  */
++  rtx base = kind == 'm' ? XEXP (src, 0) : XEXP (XEXP (src, 0), 0);
++  if (!REG_P (base) || cdp1802_sp_reg_p (base))
++    error ("cdp1802: cannot load the stack pointer from this address");
++
++  switch (kind)
++    {
++    case 'S':
++      return ("lda %M1\n\tsmi 1\n\tphi 2\n\tlda %M1\n\tplo 2\n\t"
++	      "dec %M1\n\tdec %M1\n\tlda %M1\n\tphi 2\n\tinc %M1");
++    case 'T':
++      return ("lda %M1\n\tsmi 1\n\tphi 2\n\tldn %M1\n\tplo 2\n\t"
++	      "dec %M1\n\tldn %M1\n\tphi 2\n\tdec %M1\n\tdec %M1");
++    default:
++      return ("lda %M1\n\tsmi 1\n\tphi 2\n\tldn %M1\n\tplo 2\n\t"
++	      "dec %M1\n\tldn %M1\n\tphi 2");
++    }
++}
++
+ /* Worker function for movdf_internal insn.
+ 
+    Adjust the copying order to avoid clobbering the value being copied.  */
+@@ -1093,7 +1226,9 @@ cdp1802_expand_epilogue (bool sibcall_p)
+   if (layout.locals_size)
+     {
+       if (frame_pointer_needed)
+-	emit_move_insn (stack_pointer_rtx, hard_frame_pointer_rtx);
++	/* SP <= FP here, so the interrupt-safe order is known: see
++	   cdp1802_restore_sp_from_fp in cdp1802.md.  */
++	emit_insn (gen_cdp1802_restore_sp_from_fp (hard_frame_pointer_rtx));
+       else if (layout.register_save_size)
+ 	{
+ 	  /* Fold the INC in the register pop block into this ADD.  */
+diff --git a/gcc/config/cdp1802/cdp1802.md b/gcc/config/cdp1802/cdp1802.md
+index ebbb442fe..59329f815 100644
+--- a/gcc/config/cdp1802/cdp1802.md
++++ b/gcc/config/cdp1802/cdp1802.md
+@@ -33,6 +33,7 @@
+ (define_constants
+   [
+     (SP_REG 2)
++    (UNSPEC_SP_FROM_FP 1)	; cdp1802_restore_sp_from_fp
+     ;(D_REG 16)
+     ;(CARRY_REG 17)
+     ;(X_REG 18)
+@@ -332,7 +333,7 @@
+   ]
+   "TARGET_1804"
+   "@
+-   ghi %1\n\tphi %0\n\tglo %1\n\tplo %0
++   * return cdp1802_template_movhi_r_r (operands[0]);
+    ldi %L1\n\tstxd\n\tldi %H1\n\tstxd
+    rsxd %1
+    ldi %H1\n\tstr %M0\n\tinc %M0\n\tldi %L1\n\tstr %M0\n\tinc %M0
+@@ -341,12 +342,12 @@
+    ghi %1\n\tstr %M0\n\tinc %M0\n\tglo %1\n\tstr %M0\n\tdec %M0\n\tdec %M0\n\tdec %M0
+    ghi %1\n\tstr %M0\n\tglo %1\n\tinc %M0\n\tstr %M0\n\tdec %M0
+    ldi %H1\n\tstr %M0\n\tinc %M0\n\tldi %L1\n\tstr %M0\n\tdec %M0
+-   lda %M1\n\tphi %0\n\tlda %M1\n\tplo %0		/* r0 is fixed so should never be %M1 here */
+-   lda %M1\n\tphi %0\n\tldn %M1\n\tplo %0\n\tdec %M1\n\tdec %M1\n\tdec %M1	/* r0 is fixed so should never be %M1 here */
+-   lda %M1\n\tphi %0\n\tldn %M1\n\tplo %0\n\tdec %M1	/* r0 is fixed so should never be %M1 here */
+-   ldi %H1\n\tphi %0\n\tldi %L1\n\tplo %0"
++   * return cdp1802_template_movhi_r_m (operands[0], operands[1], 'S', \"lda %M1\\n\\tphi %0\\n\\tlda %M1\\n\\tplo %0\\t\\t/* r0 is fixed so should never be %M1 here */\");
++   * return cdp1802_template_movhi_r_m (operands[0], operands[1], 'T', \"lda %M1\\n\\tphi %0\\n\\tldn %M1\\n\\tplo %0\\n\\tdec %M1\\n\\tdec %M1\\n\\tdec %M1\\t/* r0 is fixed so should never be %M1 here */\");
++   * return cdp1802_template_movhi_r_m (operands[0], operands[1], 'm', \"lda %M1\\n\\tphi %0\\n\\tldn %M1\\n\\tplo %0\\n\\tdec %M1\\t/* r0 is fixed so should never be %M1 here */\");
++   * return cdp1802_template_movhi_r_i (operands[0]);"
+   [(set_attr_alternative "length"
+-     [(const_int 4)
++     [(symbol_ref "cdp1802_sp_reg_p (operands[0]) ? 8 : 4")
+       (const_int 6)
+       (const_int 2)
+       (const_int 8)
+@@ -355,10 +356,10 @@
+       (const_int 8)
+       (const_int 6)
+       (const_int 8)
+-      (const_int 4)
+-      (const_int 7)
+-      (const_int 5)
+-      (const_int 6)
++      (symbol_ref "cdp1802_sp_reg_p (operands[0]) ? 11 : 4")
++      (symbol_ref "cdp1802_sp_reg_p (operands[0]) ? 11 : 7")
++      (symbol_ref "cdp1802_sp_reg_p (operands[0]) ? 9 : 5")
++      (symbol_ref "cdp1802_sp_reg_p (operands[0]) ? 11 : 6")
+      ])
+   ])
+ 
+@@ -369,7 +370,7 @@
+   ]
+   "!TARGET_1804"
+   "@
+-   ghi %1\n\tphi %0\n\tglo %1\n\tplo %0
++   * return cdp1802_template_movhi_r_r (operands[0]);
+    ldi %L1\n\tstxd\n\tldi %H1\n\tstxd
+    glo %1\n\tstxd\n\tghi %1\n\tstxd
+    ldi %H1\n\tstr %M0\n\tinc %M0\n\tldi %L1\n\tstr %M0\n\tinc %M0
+@@ -378,12 +379,12 @@
+    ghi %1\n\tstr %M0\n\tinc %M0\n\tglo %1\n\tstr %M0\n\tdec %M0\n\tdec %M0\n\tdec %M0
+    ghi %1\n\tstr %M0\n\tglo %1\n\tinc %M0\n\tstr %M0\n\tdec %M0
+    ldi %H1\n\tstr %M0\n\tinc %M0\n\tldi %L1\n\tstr %M0\n\tdec %M0
+-   lda %M1\n\tphi %0\n\tlda %M1\n\tplo %0		/* r0 is fixed so should never be %M1 here */
+-   lda %M1\n\tphi %0\n\tldn %M1\n\tplo %0\n\tdec %M1\n\tdec %M1\n\tdec %M1	/* r0 is fixed so should never be %M1 here */
+-   lda %M1\n\tphi %0\n\tldn %M1\n\tplo %0\n\tdec %M1	/* r0 is fixed so should never be %M1 here */
+-   ldi %H1\n\tphi %0\n\tldi %L1\n\tplo %0"
++   * return cdp1802_template_movhi_r_m (operands[0], operands[1], 'S', \"lda %M1\\n\\tphi %0\\n\\tlda %M1\\n\\tplo %0\\t\\t/* r0 is fixed so should never be %M1 here */\");
++   * return cdp1802_template_movhi_r_m (operands[0], operands[1], 'T', \"lda %M1\\n\\tphi %0\\n\\tldn %M1\\n\\tplo %0\\n\\tdec %M1\\n\\tdec %M1\\n\\tdec %M1\\t/* r0 is fixed so should never be %M1 here */\");
++   * return cdp1802_template_movhi_r_m (operands[0], operands[1], 'm', \"lda %M1\\n\\tphi %0\\n\\tldn %M1\\n\\tplo %0\\n\\tdec %M1\\t/* r0 is fixed so should never be %M1 here */\");
++   * return cdp1802_template_movhi_r_i (operands[0]);"
+   [(set_attr_alternative "length"
+-     [(const_int 4)
++     [(symbol_ref "cdp1802_sp_reg_p (operands[0]) ? 8 : 4")
+       (const_int 6)
+       (const_int 4)
+       (const_int 8)
+@@ -392,10 +393,10 @@
+       (const_int 8)
+       (const_int 6)
+       (const_int 8)
+-      (const_int 4)
+-      (const_int 7)
+-      (const_int 5)
+-      (const_int 6)
++      (symbol_ref "cdp1802_sp_reg_p (operands[0]) ? 11 : 4")
++      (symbol_ref "cdp1802_sp_reg_p (operands[0]) ? 11 : 7")
++      (symbol_ref "cdp1802_sp_reg_p (operands[0]) ? 9 : 5")
++      (symbol_ref "cdp1802_sp_reg_p (operands[0]) ? 11 : 6")
+      ])
+   ])
+ 
+@@ -508,11 +509,11 @@
+   "@
+    * return cdp1802_template_incdec (true, operands[2]);
+    glo %2\n\tstr 2\n\tglo %1\n\tadd\n\tplo %0\n\tghi %2\n\tstr 2\n\tghi %1\n\tadc\n\tphi %0
+-   glo %1\n\tadi %L2\n\tplo %0\n\tghi %1\n\tadci %H2\n\tphi %0"
++   * return cdp1802_template_addhi3_imm (true, operands);"
+   [(set_attr_alternative "length"
+      [(symbol_ref "abs (INTVAL (operands[2]))")
+       (const_int 10)
+-      (const_int 8)
++      (symbol_ref "cdp1802_length_addhi3_imm (true, operands)")
+      ])
+   ])
+ 
+@@ -535,6 +536,16 @@
+ ;    ])
+ ;  ])
+ 
++;; Restore SP from the frame pointer in the epilogue.  SP <= FP there, so
++;; writing the low byte first keeps every intermediate value at or below
++;; the new SP (interrupt safety, see cdp1802_template_addhi3_imm).
++(define_insn "cdp1802_restore_sp_from_fp"
++  [(set (reg:HI SP_REG)
++	(unspec:HI [(match_operand:HI 0 "register_operand" "r")] UNSPEC_SP_FROM_FP))]
++  ""
++  "glo %0\n\tplo 2\n\tghi %0\n\tphi 2"
++  [(set_attr "length" "4")])
++
+ ;; Subtraction
+ 
+ ;; Note: uses MEM[SP] as a temp
+@@ -550,11 +561,11 @@
+   "@
+    * return cdp1802_template_incdec (false, operands[2]);
+    glo %2\n\tstr 2\n\tglo %1\n\tsm\n\tplo %0\n\tghi %2\n\tstr 2\n\tghi %1\n\tsmb\n\tphi %0
+-   glo %1\n\tsmi %L2\n\tplo %0\n\tghi %1\n\tsmbi %H2\n\tphi %0"
++   * return cdp1802_template_addhi3_imm (false, operands);"
+   [(set_attr_alternative "length"
+      [(symbol_ref "abs (INTVAL (operands[2]))")
+       (const_int 10)
+-      (const_int 8)
++      (symbol_ref "cdp1802_length_addhi3_imm (false, operands)")
+      ])
+   ])
+ 
+-- 
+2.43.0
+

@@ -57,6 +57,24 @@ fetch() {
   test "$(git -C "$dir" rev-parse HEAD)" = "$sha"
 }
 
+# apply_patches <dir> <patchdir>: reset <dir> to its pinned commit, then apply
+# every *.patch in <patchdir> in name order (ADR 0007).  Idempotent.
+apply_patches() {
+  local dir=$1 pdir=$2 p
+  git -C "$dir" checkout -q -f HEAD
+  git -C "$dir" clean -q -fd
+  for p in "$pdir"/*.patch; do
+    [ -e "$p" ] || continue
+    log "apply $(basename "$p")"
+    git -C "$dir" apply --whitespace=nowarn "$p"
+  done
+}
+
+# patches_hash <patchdir>: short hash of all patches (part of stage stamps).
+patches_hash() {
+  cat "$1"/*.patch 2> /dev/null | sha256sum | cut -c1-8
+}
+
 # stage <name> <sha>: returns 0 (run) when the stage is not yet done at sha.
 stage() { ! grep -qx "$2" "$WORKDIR/.stamp-$1" 2>/dev/null; }
 done_stage() { echo "$2" > "$WORKDIR/.stamp-$1"; }
@@ -118,9 +136,13 @@ GCC_CONFIG=(--with-arch=1802 --without-headers --with-newlib
   --disable-shared --disable-threads --disable-libssp --disable-libquadmath
   --disable-libgomp --disable-libatomic --disable-bootstrap --disable-werror
   --disable-gcov)
-GCC_STAMP="$GCC_SHA $(echo "${GCC_CONFIG[*]}" | md5sum | cut -c1-8)"
+# toolchain/patches/gcc/*.patch: local GCC changes authorised by ADR 0007
+# (interrupt-safe stack pointer updates).
+GCC_PATCHES=$TOP/patches/gcc
+GCC_STAMP="$GCC_SHA $(echo "${GCC_CONFIG[*]}" | md5sum | cut -c1-8) $(patches_hash "$GCC_PATCHES")"
 if stage gcc "$GCC_STAMP"; then
   fetch "$WORKDIR/gcc" "$GCC_URL" "$GCC_SHA"
+  apply_patches "$WORKDIR/gcc" "$GCC_PATCHES"
   log "build GCC for $TARGET"
   # fixincludes requires the sysroot include directory to exist; it stays
   # empty of libc headers until the (validation-only) libc stage below.
@@ -139,8 +161,11 @@ if stage gcc "$GCC_STAMP"; then
 fi
 
 # ---------------------------------------------------------------- libc
+# The libc is compiled by the GCC above, so it must be rebuilt whenever GCC
+# changes (e.g. a new patch): its stamp includes the GCC stamp.
 fetch "$WORKDIR/cdp1802-elf-libc" "$LIBC_URL" "$LIBC_SHA"
-if stage libc "$LIBC_SHA"; then
+LIBC_STAMP="$LIBC_SHA / $GCC_STAMP"
+if stage libc "$LIBC_STAMP"; then
   log "build cdp1802-elf-libc (validation only, never linked into NuttX)"
   (
     cd "$WORKDIR/cdp1802-elf-libc"
@@ -148,7 +173,7 @@ if stage libc "$LIBC_SHA"; then
     make PREFIX="$SYSROOT" build > "$WORKDIR/libc-build.log" 2>&1
     make PREFIX="$SYSROOT" install > "$WORKDIR/libc-install.log" 2>&1
   )
-  done_stage libc "$LIBC_SHA"
+  done_stage libc "$LIBC_STAMP"
 fi
 
 # ---------------------------------------------------------------- sim1802

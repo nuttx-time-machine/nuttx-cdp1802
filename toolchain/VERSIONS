@@ -47,3 +47,8 @@ OTP_SHA=09fb046150ab94104e03ee816b95c8b7e6b04683
 REBAR3_URL=https://github.com/erlang/rebar3.git
 REBAR3_TAG=3.27.0
 REBAR3_SHA=619df55d9dab109cbd1b5d9ed1d45c93f5450e24
+
+# Local patches (applied by build-toolchain.sh after fetching; part of the
+# stage stamps).  Each one needs an ADR and Alan's approval (CONTRACT §5.9).
+#   patches/gcc/0001-cdp1802-make-stack-pointer-updates-interrupt-safe.patch
+#     ADR 0007 (toolchain issue 0001)
