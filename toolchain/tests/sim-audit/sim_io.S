@@ -92,6 +92,7 @@ isr_install:
 ;   isr_save_top-2  : DF (bit 0)
 ;   isr_save_top-3  : irq_count (low byte counter, also exported)
 ;   isr_save_top-4  : scratch for OUT/INP
+;   isr_save_top-5  : irq_mask, IRQs re-enabled after each acknowledge
 isr_exit:
 	inc	0		; -> DF slot
 	ldxa			; D := saved DF byte, R0 -> D slot
@@ -114,10 +115,12 @@ isr_entry:			; R1 points here after RET above
 	str	0
 	out	7
 	dec	0
-	inp	6		; D := IRQ number (ignored: only IRQ 0 is enabled)
-	ldi	0x01		; re-enable IRQ 0 (ACK clears its enable bit)
+	inp	6		; D := IRQ number (ignored)
+	dec	0		; -> irq_mask
+	ldx			; D := irq_mask
+	inc	0		; -> scratch
 	str	0
-	out	6
+	out	6		; buffer := irq_mask (ACK cleared the IRQ's enable bit)
 	dec	0
 	ldi	0x13		; INTERRUPT_WRITE_ENABLED
 	str	0
@@ -126,6 +129,9 @@ isr_entry:			; R1 points here after RET above
 
 	.data
 	.global	irq_count
+	.global	irq_mask
+irq_mask:
+	.byte	0x01		; mask      (isr_save_top-5)
 	.byte	0		; scratch   (isr_save_top-4)
 irq_count:
 	.byte	0		; counter   (isr_save_top-3)
