@@ -114,7 +114,16 @@ if stage libc-headers "$LIBC_SHA"; then
 fi
 
 # ---------------------------------------------------------------- GCC
-if stage gcc "$GCC_SHA"; then
+# --with-arch=1802 makes the default multilib the "1802" one, which is where
+#   the libc Makefile installs crt0.o/libc.a (sysroot/usr/lib/1802).
+# --disable-gcov: libgcov does not build against mikpe's minimal libc headers
+#   and NuttX does not need it (see docs/journal/step-01.md).
+GCC_CONFIG=(--with-arch=1802 --enable-languages=c --disable-nls
+  --disable-shared --disable-threads --disable-libssp --disable-libquadmath
+  --disable-libgomp --disable-libatomic --disable-bootstrap --disable-werror
+  --disable-gcov)
+GCC_STAMP="$GCC_SHA $(echo "${GCC_CONFIG[*]}" | md5sum | cut -c1-8)"
+if stage gcc "$GCC_STAMP"; then
   fetch "$WORKDIR/gcc" "$GCC_URL" "$GCC_SHA"
   log "build GCC for $TARGET"
   rm -rf "$WORKDIR/build-gcc"
@@ -122,15 +131,12 @@ if stage gcc "$GCC_SHA"; then
   (
     cd "$WORKDIR/build-gcc"
     ../gcc/configure --target="$TARGET" --prefix="$PREFIX" \
-      --with-sysroot="$SYSROOT" --enable-languages=c --disable-nls \
-      --disable-shared --disable-threads --disable-libssp \
-      --disable-libquadmath --disable-libgomp --disable-libatomic \
-      --disable-bootstrap --disable-werror \
+      --with-sysroot="$SYSROOT" "${GCC_CONFIG[@]}" \
       > "$WORKDIR/gcc-configure.log" 2>&1
     make -j"$JOBS" all-gcc all-target-libgcc > "$WORKDIR/gcc-build.log" 2>&1
     make install-gcc install-target-libgcc > "$WORKDIR/gcc-install.log" 2>&1
   )
-  done_stage gcc "$GCC_SHA"
+  done_stage gcc "$GCC_STAMP"
 fi
 
 # ---------------------------------------------------------------- libc

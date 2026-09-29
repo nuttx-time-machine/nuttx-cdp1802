@@ -25,3 +25,4 @@ step tag that depends on it was not objected to. The agent writes new ADRs as
 | # | Title | Status |
 |---|-------|--------|
 | [0001](0001-naming.md) | Architecture, chip and board naming | Proposed (agent) |
+| [0002](0002-toolchain-build.md) | Toolchain build method; mikpe libc for validation only | Proposed (agent) |
