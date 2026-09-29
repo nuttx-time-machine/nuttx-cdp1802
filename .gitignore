@@ -3,3 +3,4 @@ toolchain/work/
 build/
 *.o
 *.elf
+__pycache__/
