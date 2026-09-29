@@ -24,8 +24,8 @@ git tag of this repository where the concept first shows up in code, so you can
 | 8 | [The interfaces in `include/nuttx/arch.h`](08-arch-interfaces.md) | step-05-skeleton | table generated (Step 05); status updated per step |
 | 9 | [Interrupts](09-interrupts.md) | step-07-irq-timer | written (Step 07) |
 | 10 | [The system timer and timekeeping](10-timer.md) | step-07-irq-timer | written (Step 07) |
-| 11 | Context switching and the interrupt frame | step-08 | not written |
-| 12 | Signals and task exit | step-08 | not written |
+| 11 | [Context switching and the interrupt frame](11-context-switch.md) | step-08-context | written (Step 08) |
+| 12 | [Signals and task exit](12-signals-exit.md) | step-08-context | written (Step 08) |
 | 13 | The console and serial driver | step-09 | not written |
 | 14 | Validation: ostest and step tests | step-09 | not written |
 | 15 | [Size optimisation techniques](15-size-optimisation.md) | step-04-size-gate, step-06b-banking | written (Step 06b) |

@@ -35,6 +35,8 @@ OUTSEC = re.compile(r"^(\.\S+)\s+0x([0-9a-f]+)\s+0x([0-9a-f]+)")
 
 def kind_of(secname, outsec):
     s = secname
+    if re.match(r"\.bank\d+\.text", s):     # code banking (ADR 0013)
+        return "text"
     if s.startswith(".rodata") or s.startswith(".srodata"):
         return "rodata"
     if s.startswith(".text"):
@@ -108,6 +110,7 @@ def add(entries, secname, outsec, path, size):
 
 
 def symbol_of(secname):
+    secname = re.sub(r"^\.bank\d+", "", secname)
     parts = secname.split(".", 2)
     return parts[2] if len(parts) > 2 else secname
 
@@ -135,6 +138,15 @@ def main():
     print("%-18s %8d %8d %6d %6d %8d" % ("TOTAL", totals["text"], totals["rodata"],
           totals["data"], totals["bss"], rom))
     print("ROM (text+rodata+data) = %d bytes, RAM (data+bss, static) = %d bytes" % (rom, ram))
+    banks = collections.Counter()
+    for k, lib, obj, sec, size in entries:
+        m = re.match(r"\.bank(\d+)\.text", sec)
+        if m:
+            banks[int(m.group(1))] += size
+    if banks:
+        print("banked: fixed ROM = %d bytes, banks = %d bytes (%s)" % (
+            rom - sum(banks.values()), sum(banks.values()),
+            ", ".join("bank %d: %d" % kv for kv in sorted(banks.items()))))
 
     print("\nlargest %d input sections (functions/objects):" % args.top)
     for k, lib, obj, sec, size in sorted(entries, key=lambda e: -e[4])[:args.top]:

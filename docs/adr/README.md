@@ -40,3 +40,4 @@ step tag that depends on it was not objected to. The agent writes new ADRs as
 | [0014](0014-startup-ncrt-memory.md) | Start-up: NCRT routines in the arch, idle stack after .bss, heap to the top of RAM | Proposed (agent) |
 | [0015](0015-interrupts.md) | Interrupts: LSIE or RAM copy of IE, one register frame, one restore path | Proposed (agent); IE options per Alan (Q4) |
 | [0016](0016-tick-rate.md) | 50 Hz tick, 1 KiB idle stack, tick path in fixed ROM | Proposed (agent) |
+| [0017](0017-context-switch.md) | Context switch: one frame and restore path, signals redirect the frame in place, per-thread bank state | Proposed (agent) |

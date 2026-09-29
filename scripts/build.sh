@@ -56,9 +56,11 @@ if [ -f "$top/$out/nuttx.elf" ] && grep -q "^CONFIG_ARCH_COSMAC=y" .config; then
   "$CDP1802_TARGET-objcopy" -O binary --gap-fill 0xff nuttx.elf "$top/$out/nuttx.bin"
   # Exempt (interrupts disabled, justified in the source): __start (reset,
   # IE=0 until nx_start enables interrupts); cosmac_irq_entry (interrupt
-  # handler, IE=0 throughout; it switches R2 to the frame to resume).
+  # handler, IE=0 throughout; it switches R2 to the frame to resume);
+  # cosmac_fullcontextrestore (DIS first, then R2 := the frame to resume).
   python3 "$top/scripts/check-sp-safety.py" --allow __start \
-    --allow cosmac_irq_entry "$top/$out/nuttx.elf" \
+    --allow cosmac_irq_entry --allow cosmac_fullcontextrestore \
+    "$top/$out/nuttx.elf" \
     > "$top/$out/sp-safety.txt" 2>&1 || true
 fi
 cd "$top"
