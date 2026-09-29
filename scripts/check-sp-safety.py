@@ -128,41 +128,45 @@ def run(tool, *args):
 
 
 def functions(elf):
-    """(name, addr, size) of every sized function symbol."""
+    """(name, addr, size, section index) of every sized function symbol.
+    The section index matters for banked images (ADR 0013): every bank has
+    the same addresses, so an address alone does not identify the code."""
     out = run("readelf", "-sW", elf)
     funcs = []
     for line in out.splitlines():
         f = line.split()
-        if len(f) >= 8 and f[3] == "FUNC" and f[6] != "UND":
+        if len(f) >= 8 and f[3] == "FUNC" and f[6].isdigit():
             size = int(f[2], 0)
             if size:
-                funcs.append((f[7], int(f[1], 16), size))
-    return sorted(set(funcs), key=lambda x: x[1])
+                funcs.append((f[7], int(f[1], 16), size, int(f[6])))
+    return sorted(set(funcs), key=lambda x: (x[3], x[1]))
 
 
 def sections(elf):
-    """Contents of every ALLOC+PROGBITS section: [(vma, bytes)].  Read from
-    the ELF file directly (ELF32, big-endian), so addresses are exact."""
+    """Contents of every ALLOC+PROGBITS section: {index: (vma, bytes)}.
+    Read from the ELF file directly (ELF32, big-endian), so addresses are
+    exact."""
     import struct
     with open(elf, "rb") as fp:
         d = fp.read()
     assert d[:4] == b"\x7fELF" and d[4] == 1 and d[5] == 2, "not ELF32 big-endian"
     shoff, = struct.unpack_from(">I", d, 0x20)
     shentsize, shnum = struct.unpack_from(">HH", d, 0x2E)
-    out = []
+    out = {}
     for k in range(shnum):
         (_n, typ, flags, addr, off, size) = struct.unpack_from(
             ">IIIIII", d, shoff + k * shentsize)
         if typ == 1 and flags & 0x2 and size:          # PROGBITS, SHF_ALLOC
-            out.append((addr, d[off:off + size]))
+            out[k] = (addr, d[off:off + size])
     return out
 
 
-def bytes_at(secs, addr, size):
-    for vma, data in secs:
-        if vma <= addr and addr + size <= vma + len(data):
-            return data[addr - vma: addr - vma + size]
-    raise SystemExit("check-sp-safety: 0x%04x+%d is not in any section" % (addr, size))
+def bytes_at(secs, index, addr, size):
+    vma, data = secs.get(index, (0, b""))
+    if vma <= addr and addr + size <= vma + len(data):
+        return data[addr - vma: addr - vma + size]
+    raise SystemExit("check-sp-safety: 0x%04x+%d is not in section %d"
+                     % (addr, size, index))
 
 
 def check(elf, allow=()):
@@ -171,8 +175,8 @@ def check(elf, allow=()):
     problems, composites, singles = [], 0, 0
     global desync
     desync = []
-    for name, addr, size in funcs:
-        code = bytes_at(secs, addr, size) + b"\0\0\0"
+    for name, addr, size, index in funcs:
+        code = bytes_at(secs, index, addr, size) + b"\0\0\0"
         pc, instrs = 0, []
         while pc < size:
             length, text, control = decode(code, pc)

@@ -21,7 +21,7 @@ It has two goals of equal weight (see [`CONTRACT.md`](CONTRACT.md)):
 | 05 | `step-05-skeleton` | Architecture skeleton links (SIM64) | done |
 | 06 | `step-06-boot` | Boot from the raw ROM image to the idle loop (SIM64) | done |
 | 06b | `step-06b-banking` | Code banking: bank window, trampoline, placement tool, HWB profile (ADR 0013) | done |
-| 07 | — | Interrupts and system timer | — |
+| 07 | `step-07-irq-timer` | Interrupts and the 50 Hz system tick (HWB), LSIE or RAM-copy IE | done |
 | 08 | — | Context switching | — |
 | 09 | — | Serial driver and `ostest` | — |
 | 10 | — | NSH or infeasibility report (**GATE**) | — |

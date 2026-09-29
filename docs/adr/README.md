@@ -38,3 +38,5 @@ step tag that depends on it was not objected to. The agent writes new ADRs as
 | [0012](0012-profile-hw48.md) | Memory profile HW48/16 | Accepted (Alan) |
 | [0013](0013-code-banking.md) | Code banking: fixed ROM + 16 KiB window, stubs, bank return stack | Approach accepted (option A); design proposed, implemented at step-06b |
 | [0014](0014-startup-ncrt-memory.md) | Start-up: NCRT routines in the arch, idle stack after .bss, heap to the top of RAM | Proposed (agent) |
+| [0015](0015-interrupts.md) | Interrupts: LSIE or RAM copy of IE, one register frame, one restore path | Proposed (agent); IE options per Alan (Q4) |
+| [0016](0016-tick-rate.md) | 50 Hz tick, 1 KiB idle stack, tick path in fixed ROM | Proposed (agent) |

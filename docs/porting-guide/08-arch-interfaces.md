@@ -83,9 +83,9 @@ the preprocessor condition around the prototype.
 | `up_dataheap_memalign` | Allocate memory for data with the specified alignment and sectname. | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_ARCH_USE_DATA_HEAP)` |  |  |
 | `up_debugpoint_add` | Add a debugpoint. | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_ARCH_HAVE_DEBUG)` |  |  |
 | `up_debugpoint_remove` | Remove a debugpoint. | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_ARCH_HAVE_DEBUG)` |  |  |
-| `up_disable_irq` | This function implements disabling of the device specified by 'irq' at the interrupt controller level if supported by the architecture (up_i | `!defined(__INCLUDE_NUTTX_ARCH_H) && !defined(CONFIG_ARCH_NOINTC)` |  |  |
+| `up_disable_irq` | This function implements disabling of the device specified by 'irq' at the interrupt controller level if supported by the architecture (up_i | `!defined(__INCLUDE_NUTTX_ARCH_H) && !defined(CONFIG_ARCH_NOINTC)` |  | step-07 (board `sim1802_irq.c`) |
 | `up_dump_register` | Register dump may be handled in an architecture-specific way. | `!defined(__INCLUDE_NUTTX_ARCH_H)` | yes (assert) | step-06 (`cosmac_registerdump.c`) |
-| `up_enable_irq` | On many architectures, there are three levels of interrupt enabling: (1) at the global level, (2) at the level of the interrupt controller,  | `!defined(__INCLUDE_NUTTX_ARCH_H) && !defined(CONFIG_ARCH_NOINTC)` |  |  |
+| `up_enable_irq` | On many architectures, there are three levels of interrupt enabling: (1) at the global level, (2) at the level of the interrupt controller,  | `!defined(__INCLUDE_NUTTX_ARCH_H) && !defined(CONFIG_ARCH_NOINTC)` |  | step-07 (board `sim1802_irq.c`) |
 | `up_exit` | This function causes the currently executing task to cease to exist. | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | stub (`cosmac_stubs.c`) |
 | `up_extraheaps_init` | Initialize any extra heap. | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_ARCH_HAVE_EXTRA_HEA` |  |  |
 | `up_fork` | Architecture-specific base of both cloning primitives. | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_ARCH_HAVE_VFORK) ||` |  |  |
@@ -94,11 +94,11 @@ the preprocessor condition around the prototype.
 | `up_get_legacy_irq` | Reserve vector for legacy | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_PCI)` |  |  |
 | `up_getsp` |  | `(macro or not a prototype)` |  |  |
 | `up_getusrsp` |  | `(macro or not a prototype)` |  |  |
-| `up_idle` | up_idle() is the logic that will be executed when there is no other ready-to-run task. | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | step-06 (`cosmac_idle.c`, empty loop body) |
+| `up_idle` | up_idle() is the logic that will be executed when there is no other ready-to-run task. | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | step-07 (`cosmac_idle.c`: IDL) |
 | `up_initial_state` | A new thread is being started and a new TCB has been created. | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | step-06, idle thread only (`cosmac_initialstate.c`) |
 | `up_initialize` | up_initialize will be called once during OS initialization after the basic OS services have been initialized. | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | step-06 (`cosmac_initialize.c`, empty) |
 | `up_irq_to_ndx` | Irq to ndx | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_ARCH_IRQ_TO_NDX)` |  |  |
-| `up_irqinitialize` |  | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | step-06 (`cosmac_irq.c`) |
+| `up_irqinitialize` |  | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | step-07 (`cosmac_irq.c`: R1 := entry, board controller, IE := 1) |
 | `up_lowputc` | Output one character in early boot-stages. | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_ARCH_LOWPUTC)` |  |  |
 | `up_mdelay` | Some device drivers may require that the platform-specific logic provides these timing loops for short delays. | `!defined(__INCLUDE_NUTTX_ARCH_H)` |  |  |
 | `up_memtag_bypass` | Set MTE state bypass or not | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_ARCH_HAVE_MEMTAG)` |  |  |
@@ -156,7 +156,7 @@ the preprocessor condition around the prototype.
 | `up_timer_getmask` |  | `!defined(__INCLUDE_NUTTX_ARCH_H)` |  |  |
 | `up_timer_gettick` |  | `!defined(__INCLUDE_NUTTX_ARCH_H)` |  |  |
 | `up_timer_gettime` | Return the elapsed time since power-up (or, more correctly, since the architecture-specific timer was initialized). | `!defined(__INCLUDE_NUTTX_ARCH_H)` |  |  |
-| `up_timer_initialize` |  | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | stub (`cosmac_stubs.c`) |
+| `up_timer_initialize` |  | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | step-07 (board `sim1802_timer.c`: cycle timer, 50 Hz) |
 | `up_timer_start` | Start the interval timer. | `!defined(__INCLUDE_NUTTX_ARCH_H) && (defined(CONFIG_HRTIMER) && define` |  |  |
 | `up_timer_tick_cancel` |  | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_SCHED_TICKLESS) && ` |  |  |
 | `up_timer_tick_start` |  | `!defined(__INCLUDE_NUTTX_ARCH_H) && (defined(CONFIG_HRTIMER) && define` |  |  |

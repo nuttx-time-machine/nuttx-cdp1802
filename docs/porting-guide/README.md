@@ -22,8 +22,8 @@ git tag of this repository where the concept first shows up in code, so you can
 | 6 | [Toolchain integration](06-toolchain-integration.md) | step-05-skeleton | written (Step 05) |
 | 7 | [Linker scripts and start-up code](07-startup.md) | step-06-boot | written (Step 06) |
 | 8 | [The interfaces in `include/nuttx/arch.h`](08-arch-interfaces.md) | step-05-skeleton | table generated (Step 05); status updated per step |
-| 9 | Interrupts | step-07 | not written |
-| 10 | The system timer and timekeeping | step-07 | not written |
+| 9 | [Interrupts](09-interrupts.md) | step-07-irq-timer | written (Step 07) |
+| 10 | [The system timer and timekeeping](10-timer.md) | step-07-irq-timer | written (Step 07) |
 | 11 | Context switching and the interrupt frame | step-08 | not written |
 | 12 | Signals and task exit | step-08 | not written |
 | 13 | The console and serial driver | step-09 | not written |
