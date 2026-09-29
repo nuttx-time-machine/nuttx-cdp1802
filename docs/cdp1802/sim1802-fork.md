@@ -16,6 +16,9 @@ exists and how it was verified.
 | `a63cf9e` | Console input: GETCHAR (0xE1), STATUS (0xE2), level-triggered IRQ 6, EOF signalled once | Serial driver RX and interactive NSH (Steps 09–10) |
 | `1e08519`, `55b6d99` | `.gitignore`, README | housekeeping, documentation |
 | `bef5700` | `__sim1802_rom_end` symbol sets the write-protect limit | ROM emulation for the board's memory profiles (ADR 0005). Upstream only used libc symbols (`__DTOR_END__`, `_fini`) that NuttX images do not have. |
+| `a3d1933` | Console 8-bit clean (standard I/O in latin1) | Bytes ≥ 0x80 were written as two UTF-8 bytes (0xDB → C3 9B) and input was UTF-8-decoded; a serial console must pass every byte. |
+| `f41d9eb` | `--rom FILE` mode: boot a raw ROM image like a real board (0xFF-filled ROM window, pseudo-random RAM and undefined registers from `--ram-seed`, no boot args, ROM writes ignored / `--rom-writes warn\|trap`, `--symbols ELF`) | Alan's requirement: the EPROM image must boot in the simulator exactly as on the real machine (ADR 0005). |
+| `708bd2c` | README for ROM mode | documentation |
 | `1be386b` | ELF segments loaded at `p_paddr` (load address), not `p_vaddr` | A ROM image keeps `.data`'s initial values in ROM and copies them to RAM. With `p_vaddr` the ROM copy was never loaded (found by the Step 03 smoke test). Ordinary images have `p_paddr == p_vaddr`. |
 
 Cycle counts come from RCA MPM-201A p. 8 (2 machine cycles per instruction,

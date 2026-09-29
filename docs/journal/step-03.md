@@ -154,10 +154,64 @@ PASS: step 03
 - **H6**: nothing new (no NuttX code yet); the profiles that the judgement
   will use are now defined and executable.
 
+### Part 3 — booting the ROM image like the real machine (Alan's review)
+
+Alan's review of the first version of ADR 0005: *"you need to use a ROM
+option to sim1802 that be exactly like the real machine. This way we could
+write the binary on the ROM and get it booting correctly on real machine."*
+
+1. Listed what differed between the simulator's ELF-loader start and a real
+   power-on: the program comes from an ELF instead of ROM bytes; unused
+   ROM reads 0x00 instead of 0xFF; RAM and R1–R15/D/DF/T are zero instead of
+   undefined [MPM p. 72]; the loader writes boot arguments before the first
+   instruction; ROM writes trap instead of being ignored.
+2. Added `--rom FILE` to the fork (`sim1802_rom_loader`), with `--rom-size`,
+   `--ram-seed`, `--rom-writes ignore|warn|trap` and `--symbols ELF` (symbol
+   names only). The raw 342-byte smoke image
+   (`objcopy -O binary`, first bytes `71 00` = `DIS; 0x00`) boots:
+   `sim1802 board ok, ticks=5`, 26 109 cycles — the same as via the ELF loader.
+3. Negative checks: the smoke build **without** its `.data` copy now prints
+   `ticks=!` (seed 1802) or a byte 0xDB (seed 7) instead of `5`; ROM writes
+   are silently ignored by default, reported with `warn`, fatal with `trap`;
+   a 40 000-byte image is rejected for a 32 KiB ROM.
+4. **Found an upstream console bug** while doing (3): seed 7's garbage byte
+   0xDB came out as *two* bytes `C3 9B` — Erlang's standard I/O was in UTF-8
+   mode. Input was affected too (`DB 80 41 FF` arrived as 3 characters). Fixed
+   (`io:setopts(standard_io, [{encoding, latin1}])`, commit `a3d1933`); now
+   4 bytes in, 4 bytes out.
+5. While committing: the first attempt to verify the console fix on its own
+   failed to build because `git stash` does not stash untracked files, so the
+   new ROM-loader module was still present without its dependencies. Moved it
+   aside; each fork commit was then built and tested from clean.
+6. Made SIM64 ROM-bootable as well: its ROM is now exactly the image
+   (`.text`, `.rodata`, `.data` initial values), `.data` is copied to RAM like
+   in HW32/32, and `__sim1802_rom_end = _sdata` gives the `--rom-size`.
+7. `scripts/run.sh` now boots every image that defines `__sim1802_rom_end`
+   from `<elf>.bin` with `--rom` automatically (`RUN_MODE=elf` for the old
+   path). `test-sim-fork.sh`'s write-protect probe needs argv, which ROM mode
+   cannot give, so it uses `RUN_MODE=elf` explicitly (first run failed with
+   status 2 from `run.sh` for that reason).
+8. Rewrote ADR 0005 (still Proposed), the board document and
+   `scripts/test-step-03.sh`.
+
+```
+$ scripts/test-step-03.sh
+PASS: sim1802 fork
+ok: hw32 boots from its 342-byte ROM image (@ cycles 26109)
+ok: hw32 RAM is undefined at power-on (missing .data copy is caught)
+ok: hw32 ROM write ignored (default) / trapped (--rom-writes trap)
+ok: sim64 boots from its 342-byte ROM image (@ cycles 26109)
+ok: sim64 RAM is undefined at power-on (missing .data copy is caught)
+ok: sim64 ROM write ignored (default) / trapped (--rom-writes trap)
+ok: linker scripts reject oversized images
+PASS: step 03
+```
+
 ### Open questions for Alan
 
-- **ADR 0005 needs your acceptance** (the contract's Step 03 exit criterion
-  is "the ADR is accepted"). The step will be tagged `step-03-board` after that.
+- **ADR 0005 (revised for ROM boot) needs your acceptance** (the contract's
+  Step 03 exit criterion is "the ADR is accepted"). The step will be tagged
+  `step-03-board` after that.
 - `docs/cdp1802/primer.md` (CONTRACT §7.4) is not written yet; planned
   alongside Step 05 (porting-guide chapters 3–5).
 

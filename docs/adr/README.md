@@ -28,4 +28,4 @@ step tag that depends on it was not objected to. The agent writes new ADRs as
 | [0002](0002-toolchain-build.md) | Toolchain build method; mikpe libc for validation only | Proposed (agent); partially superseded by 0004 |
 | [0003](0003-simulator-strategy.md) | Simulator strategy (timer, time base, console input) | Accepted (Alan) |
 | [0004](0004-libc-independence.md) | NuttX uses only its own libc; libgcc built without target libc headers | Accepted |
-| [0005](0005-sim1802-board.md) | sim1802 board: reset at 0, SIM64 / HW32/32 profiles, devices | **Proposed — needs Alan (Step 03 exit)** |
+| [0005](0005-sim1802-board.md) | sim1802 board: boots the raw ROM image like the real machine; SIM64 / HW32/32 profiles; devices | **Proposed — needs Alan (Step 03 exit)** |

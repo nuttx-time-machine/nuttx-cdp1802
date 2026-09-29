@@ -7,8 +7,8 @@ and archives.
 
 Memory profiles (defined in Step 03: `docs/cdp1802/board-sim1802.md`, ADR 0005):
 
-- **SIM64**: all 64 KiB is usable (development). Read-only image from 0x0000, RAM directly after it; loadable bytes must end below 0xFF00 (simulator loader limit).
-- **HW32/32**: 32 KiB ROM 0x0000–0x7FFF (`.text` + `.rodata` + `.data` init image) and 32 KiB RAM 0x8000–0xFFFF (`.data` + `.bss` + heap + stacks). This profile is used for the feasibility judgement. Both profiles are executable in the simulator, with ROM write-protected.
+- **SIM64**: all 64 KiB is usable (development). ROM image (code, read-only data, `.data` initial values) from 0x0000, exactly as large as needed; RAM from there to 0xFFFF.
+- **HW32/32**: 32 KiB ROM 0x0000–0x7FFF (`.text` + `.rodata` + `.data` init image) and 32 KiB RAM 0x8000–0xFFFF (`.data` + `.bss` + heap + stacks). This profile is used for the feasibility judgement. Both profiles boot the raw ROM binary in the simulator exactly like the real machine (ADR 0005).
 
 | Step | Config | .text | .rodata | .data | .bss | ROM total | RAM total | Largest 3 subsystems | SIM64 | HW32/32 | Note |
 |------|--------|------:|--------:|------:|-----:|----------:|----------:|----------------------|:-----:|:-------:|------|

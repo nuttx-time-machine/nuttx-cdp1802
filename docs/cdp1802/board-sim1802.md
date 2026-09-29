@@ -26,13 +26,35 @@ The simulator has no clock: the nominal clock only converts time
 time for measurements. With `--pace HZ` the simulator slows idle periods to
 match.
 
-## 2. Reset
+## 2. The ROM image and reset — exactly like the real machine
 
-On reset the CPU has I, N, X, P = 0, R(0) = 0, Q = 0, IE = 1 and starts at
-M(0x0000) with R(0) as program counter [MPM p. 72, Fig. 86]. The simulator
-matches this (`sim1802_core:init/2`), and because a NuttX image's entry point
-is 0x0000, the loader installs no bootstrap of its own
-(`install_bootstrap(0) -> ok`).
+**The artefact is the ROM binary.** A NuttX build for this board produces
+`nuttx.elf` and, with `objcopy -O binary`, `nuttx.bin`: the exact bytes to
+program into an EPROM at address 0x0000. The simulator boots *that file*
+(`sim1802 --rom nuttx.bin`, fork commit `f41d9eb`), not the ELF, so what runs
+in the simulator is what would run on hardware:
+
+| At power-on | Real CDP1802 board | `sim1802 --rom` |
+|-------------|--------------------|-----------------|
+| ROM 0x0000.. | the programmed bytes | the `.bin` file |
+| unprogrammed ROM | 0xFF (erased EPROM) | 0xFF up to `--rom-size` |
+| RAM | undefined | pseudo-random (`--ram-seed`, default 1802; reproducible) |
+| I, N, X, P, R(0), Q, IE | 0, 0, 0, 0, 0x0000, 0, 1 [MPM p. 72, Fig. 86] | same |
+| R(1)–R(15), D, DF, T | undefined | pseudo-random (same seed) |
+| before the first instruction | nothing | nothing (no bootstrap, no boot arguments) |
+| write to ROM | no effect | ignored (`--rom-writes warn\|trap` to debug) |
+| console bytes | 8-bit | 8-bit clean (fork commit `a3d1933`) |
+
+`scripts/run.sh <elf>` does this automatically for any image that defines
+`__sim1802_rom_end`: it writes `<elf>.bin`, and runs
+`sim1802 --rom <elf>.bin --rom-size <__sim1802_rom_end> --symbols <elf>`
+(the ELF is only used for symbol names in traces). `RUN_MODE=elf` forces the
+old ELF-loader path, which the Step 01/02 validation programs still use.
+
+Because RAM and most registers are *not* zero, start-up code that forgets to
+copy `.data`, clear `.bss` or initialise a register fails in the simulator
+just as it would on the board (tested: the smoke program without its `.data`
+copy prints garbage that changes with `--ram-seed`).
 
 The board's first instructions (Step 06; shown working in
 `toolchain/tests/board/smoke.S`):
@@ -52,48 +74,44 @@ both.
 ```
             SIM64 (development)                 HW32/32 (feasibility target)
  0xFFFF +---------------------------+   0xFFFF +---------------------------+
-        | heap ↓ / stacks           |          | heap / stacks             |
-        | (boot args written here   |          | (boot args written here   |
-        |  by the loader, unused)   |          |  by the loader, unused)   |
+        | heap / stacks             |          | heap / stacks             |
         +---------------------------+          +---------------------------+
-        | .bss   (NOLOAD, cleared)  |          | .bss  (NOLOAD, cleared)   |
+        | .bss   (cleared at boot)  |          | .bss  (cleared at boot)   |
         +---------------------------+          +---------------------------+
-        | .data  (loaded in place,  |          | .data (run address; copied|
-        |  LMA = VMA, no copy)      |   0x8000 |  from ROM at start-up)    |
- rom_end+---------------------------+   0x7FFF +===========================+
-        | .rodata                   |  RAM ↑   | (unused ROM)              |
-        | .text                     |  ROM ↓   | .data initial values(LMA) |
-        | .reset (reset code)       |          | .rodata                   |
- 0x0000 +---------------------------+          | .text                     |
-                                               | .reset (reset code)       |
-  write-protected: [0, __sim1802_rom_end)  0x0000 +---------------------------+
-  __sim1802_rom_end = end of .rodata        write-protected: [0, 0x8000)
+        | .data  (copied from ROM   |          | .data (copied from ROM    |
+        |  at boot)                 |   0x8000 |  at boot)                 |
+ rom_end+===========================+   0x7FFF +===========================+
+        | .data initial values      |  RAM ↑   | (unprogrammed: 0xFF)      |
+        | .rodata                   |  ROM ↓   | .data initial values      |
+        | .text                     |          | .rodata                   |
+        | .reset (reset code)       |          | .text                     |
+ 0x0000 +---------------------------+   0x0000 | .reset (reset code)       |
+                                               +---------------------------+
+  ROM = [0, __sim1802_rom_end = _sdata)     ROM = [0, 0x8000)
+  nuttx.bin = the whole ROM image           nuttx.bin = ROM image (≤ 32 KiB)
 ```
 
 | | SIM64 | HW32/32 |
 |--|--|--|
-| ROM | 0x0000 – end of `.rodata` (grows with the image) | 0x0000 – 0x7FFF (32 KiB) |
-| RAM | end of `.rodata` – 0xFFFF | 0x8000 – 0xFFFF (32 KiB) |
-| `.data` | loaded in place (LMA = VMA) | LMA in ROM, VMA in RAM, copied by start-up code |
-| write protection | `[0, __sim1802_rom_end)` | `[0, 0x8000)` |
+| ROM | 0x0000 – end of the ROM image (exactly as big as needed) | 0x0000 – 0x7FFF (32 KiB) |
+| RAM | end of ROM image – 0xFFFF | 0x8000 – 0xFFFF (32 KiB) |
+| `.data` | LMA in ROM (after `.rodata`), VMA in RAM, copied by start-up code | same |
+| `__sim1802_rom_end` (= `--rom-size`) | `_sdata`, the first RAM byte | 0x8000 |
 | linker-script prototype | `toolchain/tests/board/sim64.ld` | `toolchain/tests/board/hw32.ld` |
 | selected by | `CONFIG_BOARD_SIM1802_PROFILE_SIM64` | `CONFIG_BOARD_SIM1802_PROFILE_HW32` (default for size judgements) |
 
 Rules and constraints, each checked by `scripts/test-step-03.sh`:
 
 - **The reset code must be first** in `.text` (`KEEP(*(.reset))`).
-- **Loadable bytes must end below 0xFF00:** the simulator's ELF loader rejects
-  anything above (`load_phdr/2`: `PAddr + FileSz =< 65536 - 256`). Only
-  NOLOAD sections (`.bss`, heap, stacks) may use the top 256 bytes. Both
-  linker scripts assert this.
-- **Segments are loaded at their physical address** (`p_paddr`), as a ROM
-  programmer would (fork commit `1be386b`). That is what makes the HW32/32
-  `.data` copy work.
-- **Boot arguments:** after loading, the simulator writes a boot-argument
-  block (magic 0x1802, argc/argv/envp and a few filtered environment strings:
-  HOME, HOSTNAME, USER, …) downwards from 0xFFF8. NuttX ignores it; the area
-  becomes stack/heap. Nothing loadable may live there (guaranteed by the
-  0xFF00 rule).
+- **The ROM image must fit the ROM**: HW32/32 asserts it in the linker script
+  (`HW32/32: ROM overflow`); in SIM64 ROM + RAM must fit in 64 KiB (`will not
+  fit in region 'mem'`).
+- **ELF-loader mode only** (`RUN_MODE=elf`, validation programs): the loader
+  places segments at their physical address `p_paddr` (fork commit
+  `1be386b`, so the ELF path agrees with the ROM path), rejects loadable
+  bytes above 0xFF00, and writes a boot-argument block (magic 0x1802,
+  argc/argv/envp, a few environment strings) down from 0xFFF8. None of this
+  exists in ROM mode or on hardware; NuttX never relies on it.
 - **Stacks:** the idle-thread stack follows `.bss`, the heap runs from the end
   of the idle stack to 0xFFFF (standard NuttX pattern, Step 05). SP points one
   byte *below* the last pushed byte (ABI), so the highest usable stack byte of
@@ -135,16 +153,21 @@ external one on the INT line), its own memory decoding, and possibly DMA
 ## 6. Verification
 
 `scripts/test-step-03.sh` links `toolchain/tests/board/smoke.S` with both
-linker-script prototypes and runs it: reset at 0x0000, `.data` copy from ROM,
-`.bss` clear, console output, 5 cycle-timer interrupts through the R0-based
-ISR while in `IDL`, halt with status 0. It also checks that a write into ROM
-traps.
+linker-script prototypes, converts each to its raw ROM binary and boots it
+with `--rom`: reset at 0x0000, `.data` copy from ROM, `.bss` clear, console
+output, 5 cycle-timer interrupts through the R0-based ISR while in `IDL`,
+halt with status 0. It also checks that the binary starts with the reset
+code, that the ELF-loader run gives the same output, that a build *without*
+the `.data` copy fails (undefined RAM), and that ROM writes are ignored or
+trapped as selected.
 
 ```
---- hw32: 00000151 A _eronly 00008000 D _sdata 00008000 B __sim1802_rom_end
-sim1802 board ok, ticks=5
-@ cycles 26109
---- sim64: 00000151 A _eronly 00000151 D _sdata 00000151 T __sim1802_rom_end
-sim1802 board ok, ticks=5
-@ cycles 26109
+ok: hw32 boots from its 342-byte ROM image (@ cycles 26109)
+ok: hw32 RAM is undefined at power-on (missing .data copy is caught)
+ok: hw32 ROM write ignored (default) / trapped (--rom-writes trap)
+ok: sim64 boots from its 342-byte ROM image (@ cycles 26109)
+ok: sim64 RAM is undefined at power-on (missing .data copy is caught)
+ok: sim64 ROM write ignored (default) / trapped (--rom-writes trap)
+ok: linker scripts reject oversized images
+PASS: step 03
 ```
