@@ -4,7 +4,10 @@
 ;   ROM 0x0000-0x7FFF write-protected, RAM 0x8000-0xFFFF
 ;   .data copied from ROM to RAM, .bss cleared
 ;   console output (OUT 6 byte, OUT 7 0xE0)
-;   cycle timer (mode 4) on IRQ 0, R0-based ISR, IDL
+;   cycle timer (mode 4) on IRQ 0, standard R2-stack ISR, IDL
+; Register convention (ADR 0006): R1 = interrupt PC (hardware), R2 = stack
+; pointer, always valid for the ISR (X=2 on interrupt), R3 = program counter
+; after reset, R0 never used after reset (free for DMA).
 ;   halt with status (OUT 6 status, OUT 7 0x00)
 ; Prints "sim1802 board ok, ticks=5" and exits with status 0.
 
@@ -20,7 +23,7 @@ __start:			; reset: P=0, X=0, R0=0x0000, IE=1
 	phi	3
 	ldi	%lo(main)
 	plo	3
-	sep	3		; PC := R3, R0 becomes free (no DMA on this board)
+	sep	3		; PC := R3 (convention); R0 is left free for DMA
 
 	.text
 main:
@@ -83,15 +86,11 @@ main:
 	inc	9
 	lbr	4b
 
-6:	; interrupts: R1 = ISR, R0 = ISR save pointer (in RAM)
+6:	; interrupts: R1 = ISR entry; the ISR saves context on R2
 	ldi	%hi(isr_entry)
 	phi	1
 	ldi	%lo(isr_entry)
 	plo	1
-	ldi	%hi(isr_save_top+1)
-	phi	0
-	ldi	%lo(isr_save_top+1)
-	plo	0
 
 	; timer: period, enable IRQ 0, mode 4
 	ldi	(PERIOD & 0xff)
@@ -248,50 +247,64 @@ cmd_then_11:
 	dec	2
 	lbr	11b
 
-; ISR (entry P=1, X=2, IE=0).  Never stores through R2 (toolchain issue
-; 0001): R0 points into a RAM save area.  Save area (R0-relative):
-;   top: T, top-1: D, top-2: DF, top-3: ticks, top-4: scratch
+; ISR, the standard R2-stack form [MPM-201A p. 65, Fig. 76]: entry with
+; P=1, X=2, IE=0.  DEC 2 first, because the interrupted code may be using
+; M(R2) (compiled code keeps a scratch byte there).  Frame, from the top:
+;   T (X,P of the interrupted code), D, DF, R15.0, R15.1
+; RET at the end restores X,P from T and sets IE=1; because the exit code
+; sits right before the entry, R1 is left pointing at isr_entry again.
 isr_exit:
-	inc	0
-	ldxa
-	shr
-	ldxa
-	ret
+	lda	2		; R15.1
+	phi	15
+	lda	2		; R15.0
+	plo	15
+	lda	2		; DF byte
+	shr			; DF := bit 0
+	lda	2		; D
+	ret			; X,P := T, R2++, IE := 1
 isr_entry:
-	sex	0
-	dec	0
-	sav
-	dec	0
-	stxd
-	shlc
-	stxd			; R0 -> ticks
-	ldx
+	dec	2
+	sav			; push T
+	dec	2
+	str	2		; push D
+	shlc			; D.0 := DF
+	dec	2
+	str	2		; push DF
+	glo	15
+	dec	2
+	str	2		; push R15.0
+	ghi	15
+	dec	2
+	str	2		; push R15.1
+
+	ldi	%hi(ticks)	; ticks++
+	phi	15
+	ldi	%lo(ticks)
+	plo	15
+	ldn	15
 	adi	1
-	str	0		; ticks++
-	dec	0		; -> scratch
+	str	15
+
+	dec	2		; OUT reads M(R2) and increments R2: net 0
 	ldi	0x10		; acknowledge
-	str	0
+	str	2
 	out	7
-	dec	0
-	inp	6
-	ldi	0x01		; re-enable IRQ 0
-	str	0
+	dec	2
+	inp	6		; D := IRQ number (ignored: only IRQ 0 is enabled)
+	ldi	0x01		; re-enable IRQ 0 (ACK cleared its enable bit)
+	str	2
 	out	6
-	dec	0
+	dec	2
 	ldi	0x13
-	str	0
-	out	7		; R0 -> ticks
+	str	2
+	out	7
 	lbr	isr_exit
 
 	.section .rodata
 msg:	.asciz	"sim1802 board ok, ticks="
 
 	.data			; copied from ROM at start-up
-	.byte	0		; scratch
 ticks:	.byte	'0'		; initialised data: proves the .data copy
-	.byte	0, 0		; DF, D
-isr_save_top:
-	.byte	0		; T
 
 	.bss
 	.global	bss_probe

@@ -35,15 +35,24 @@ for p in hw32 sim64; do
   [ "$(RUN_MODE=elf scripts/run.sh --cycles "$B/smoke-$p.elf" 2>&1)" = "$out1" ] \
     || fail "$p: ELF-loader run differs from ROM run"
 
-  # Power-on RAM is undefined: without the .data copy the result is garbage,
-  # and it depends on the power-on state (seed).
+  # Power-on RAM and registers are undefined (--ram-seed picks one of many
+  # power-on states).  The correct program works in all of them; without the
+  # .data copy the result depends on the power-on state.  (One seed alone
+  # proves nothing: with seed 7 the garbage byte happens to be '0'.)
   link $p nocopy-$p -DSMOKE_NO_DATA_COPY "$D/smoke.S"
-  a=$(scripts/run.sh "$B/nocopy-$p.elf" | od -An -tx1)
-  b=$(scripts/run.sh --ram-seed 7 "$B/nocopy-$p.elf" | od -An -tx1)
-  ok=$(printf 'sim1802 board ok, ticks=5\n' | od -An -tx1)
-  [ "$a" != "$ok" ] && [ "$b" != "$ok" ] && [ "$a" != "$b" ] \
-    || fail "$p: RAM looks initialised at power-on"
-  echo "ok: $p RAM is undefined at power-on (missing .data copy is caught)"
+  seeds="1 2 3 4 5 6 7 8"
+  good=0; outs=""
+  for s in $seeds; do
+    [ "$(scripts/run.sh --ram-seed $s "$B/smoke-$p.elf")" = 'sim1802 board ok, ticks=5' ] \
+      || fail "$p: correct program fails with --ram-seed $s"
+    o=$(scripts/run.sh --ram-seed $s "$B/nocopy-$p.elf" | od -An -tx1 | tr -d ' \n')
+    [ "$o" = "$(printf 'sim1802 board ok, ticks=5\n' | od -An -tx1 | tr -d ' \n')" ] && good=$((good + 1))
+    outs="$outs $o"
+  done
+  distinct=$(tr ' ' '\n' <<< "$outs" | sort -u | grep -c .)
+  [ $good -le 2 ] && [ $distinct -ge 4 ] \
+    || fail "$p: RAM looks initialised at power-on ($good/8 correct, $distinct distinct)"
+  echo "ok: $p works from 8 power-on states; without .data copy: $good/8 correct, $distinct distinct outputs"
 
   # A write into ROM is ignored like on hardware, or trapped on request.
   link $p wrom-$p -DSMOKE_WRITE_ROM "$D/smoke.S"
