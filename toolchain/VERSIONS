@@ -1,0 +1,41 @@
+# Pinned toolchain sources for the NuttX CDP1802 port.
+# This file is sourced by build-toolchain.sh (plain KEY=VALUE shell syntax).
+# Every source is pinned by full commit SHA; the branch is informational only.
+
+TARGET=cdp1802-unknown-elf
+
+# GNU binutils, mikpe's CDP1802 port (branch cdp1802, tracks binutils master)
+BINUTILS_URL=https://github.com/mikpe/binutils-gdb.git
+BINUTILS_BRANCH=cdp1802
+BINUTILS_SHA=27ba481c4dcf21e09f1703d0c03c4d173f92ac74
+
+# GCC, mikpe's CDP1802 port (branch gcc15-cdp1802, C only, soft-float)
+GCC_URL=https://github.com/mikpe/gcc.git
+GCC_BRANCH=gcc15-cdp1802
+GCC_SHA=8b18811140eab695e6e4badf79108732d5f64c30
+
+# mikpe's tiny libc (GPL-3.0). Used ONLY for toolchain validation programs
+# (Step 01); it is never linked into NuttX. See docs/adr/0002.
+LIBC_URL=https://github.com/mikpe/cdp1802-elf-libc.git
+LIBC_BRANCH=master
+LIBC_SHA=833e87f23663be5a958e2f805a163c6630ef5c51
+
+# sim1802 simulator (Apache-2.0, written in Erlang)
+SIM_URL=https://github.com/mikpe/sim1802.git
+SIM_BRANCH=master
+SIM_SHA=3b28ed21695bef829da09ae7ba3a933e0c858af6
+
+# buildcross (GPL-3.0). Recorded for reference only: it has no cdp1802
+# recipe at this SHA, so it is NOT used (see docs/adr/0002).
+BUILDCROSS_URL=https://github.com/mikpe/buildcross.git
+BUILDCROSS_SHA=1af64499e35f01a3b031680cdea429c2d608afbd
+
+# Erlang/OTP, needed to build and run sim1802 (CI of sim1802 uses OTP 27-29)
+OTP_URL=https://github.com/erlang/otp.git
+OTP_TAG=OTP-28.5.0.7
+OTP_SHA=09fb046150ab94104e03ee816b95c8b7e6b04683
+
+# rebar3 (Erlang build tool) — version required by sim1802's Makefile
+REBAR3_URL=https://github.com/erlang/rebar3.git
+REBAR3_TAG=3.27.0
+REBAR3_SHA=619df55d9dab109cbd1b5d9ed1d45c93f5450e24

@@ -1,0 +1,5 @@
+toolchain/install/
+toolchain/work/
+build/
+*.o
+*.elf
