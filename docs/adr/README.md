@@ -26,3 +26,4 @@ step tag that depends on it was not objected to. The agent writes new ADRs as
 |---|-------|--------|
 | [0001](0001-naming.md) | Architecture, chip and board naming | Proposed (agent) |
 | [0002](0002-toolchain-build.md) | Toolchain build method; mikpe libc for validation only | Proposed (agent) |
+| [0003](0003-simulator-strategy.md) | Simulator strategy (timer, time base, console input) | **Proposed — awaiting Alan (Step 02 gate)** |

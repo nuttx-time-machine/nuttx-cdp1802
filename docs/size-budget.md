@@ -14,3 +14,4 @@ Memory profiles (defined formally in Step 03, `docs/cdp1802/board-sim1802.md`):
 |------|--------|------:|--------:|------:|-----:|----------:|----------:|----------------------|:-----:|:-------:|------|
 | 00 | — | — | — | — | — | — | — | — | — | — | No NuttX image yet |
 | 01 | — | — | — | — | — | — | — | — | — | — | No NuttX image yet. Toolchain reference points (mikpe libc, not NuttX): hello 995 B text; printf+double soft-float 47 517 B text (`__adddf3` 15 198, `__muldf3` 12 012). See journal step-01. |
+| 02 | — | — | — | — | — | — | — | — | — | — | No NuttX image yet (simulator audit only) |
