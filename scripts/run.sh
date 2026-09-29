@@ -8,4 +8,5 @@
 set -euo pipefail
 . "$(dirname "$0")/env.sh"
 [ $# -ge 1 ] || { echo "usage: $0 <elf> [args...]" >&2; exit 2; }
-exec timeout "${RUN_TIMEOUT:-120}" "$CDP1802_TARGET-sim" "$@"
+# SIM selects another simulator binary, e.g. SIM=$CDP1802_TARGET-sim-upstream.
+exec timeout "${RUN_TIMEOUT:-120}" "${SIM:-$CDP1802_TARGET-sim}" "$@"

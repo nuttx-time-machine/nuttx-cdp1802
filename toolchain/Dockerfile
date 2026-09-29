@@ -18,8 +18,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY toolchain/VERSIONS toolchain/build-toolchain.sh /src/toolchain/
+COPY simulator /src/simulator
 RUN PREFIX=/opt/cdp1802 WORKDIR=/tmp/tc /src/toolchain/build-toolchain.sh \
-    && rm -rf /tmp/tc
+    && rm -rf /tmp/tc /src/simulator/_build
 
 ENV PATH=/opt/cdp1802/bin:/opt/cdp1802/otp/bin:$PATH
 ENV CDP1802_PREFIX=/opt/cdp1802

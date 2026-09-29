@@ -4,3 +4,6 @@
 [submodule "apps"]
 	path = apps
 	url = https://github.com/apache/nuttx-apps.git
+[submodule "simulator"]
+	path = simulator
+	url = https://github.com/mikpe/sim1802.git

@@ -1,0 +1,9 @@
+# Only toolchain/ and simulator/ are needed to build the toolchain image.
+build
+nuttx
+apps
+toolchain/install
+toolchain/work
+simulator/_build
+simulator/bin
+.git

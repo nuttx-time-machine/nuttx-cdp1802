@@ -8,7 +8,9 @@
 #   2. binutils       (mikpe/binutils-gdb, cdp1802-unknown-elf)
 #   3. GCC            (mikpe/gcc, C only, soft-float, multilib 1802/1804)
 #   4. cdp1802-elf-libc (mikpe, GPL-3.0; ONLY for toolchain validation)
-#   5. sim1802        (mikpe, Erlang escript)
+#   5. sim1802        (mikpe, Erlang escript): the cdp1802-nuttx fork from
+#                      the simulator/ submodule as $TARGET-sim, and upstream
+#                      as $TARGET-sim-upstream
 #
 # Every source is fetched at the exact commit SHA recorded in
 # toolchain/VERSIONS.  The script is idempotent: each stage writes a stamp
@@ -150,16 +152,37 @@ if stage libc "$LIBC_SHA"; then
 fi
 
 # ---------------------------------------------------------------- sim1802
-if stage sim1802 "$SIM_SHA"; then
-  fetch "$WORKDIR/sim1802" "$SIM_URL" "$SIM_SHA"
-  log "build sim1802"
+# build_sim <srcdir> <installed-name>: build the escript only; do not let
+# "make install" edit the user's ~/.dejagnurc.
+build_sim() {
   (
-    cd "$WORKDIR/sim1802"
-    # Build and install only the escript; do not let "make install" edit
-    # the user's ~/.dejagnurc.
-    make REBAR3="$PREFIX/bin/rebar3" build > "$WORKDIR/sim1802-build.log" 2>&1
-    install -D -m 755 _build/default/bin/sim1802 "$PREFIX/bin/$TARGET-sim"
+    cd "$1"
+    make REBAR3="$PREFIX/bin/rebar3" build > "$WORKDIR/$2-build.log" 2>&1
+    install -D -m 755 _build/default/bin/sim1802 "$PREFIX/bin/$2"
   )
+}
+
+if stage sim1802-upstream "$SIM_UPSTREAM_SHA"; then
+  fetch "$WORKDIR/sim1802" "$SIM_UPSTREAM_URL" "$SIM_UPSTREAM_SHA"
+  log "build upstream sim1802 (for the Step 02 audit)"
+  build_sim "$WORKDIR/sim1802" "$TARGET-sim-upstream"
+  done_stage sim1802-upstream "$SIM_UPSTREAM_SHA"
+fi
+
+SIM_DIR=$(cd "$TOP/.." && pwd)/$SIM_SRC
+[ -f "$SIM_DIR/src/sim1802_core.erl" ] \
+  || { echo "missing $SIM_DIR: run 'git submodule update --init'" >&2; exit 1; }
+if have=$(git -C "$SIM_DIR" rev-parse HEAD 2> /dev/null); then
+  [ "$have" = "$SIM_SHA" ] || { echo "$SIM_DIR is at $have, VERSIONS pins $SIM_SHA" >&2; exit 1; }
+  [ -z "$(git -C "$SIM_DIR" status --porcelain --untracked-files=no)" ] \
+    || { echo "$SIM_DIR has uncommitted changes" >&2; exit 1; }
+else
+  # e.g. inside the Docker build, where the submodule's .git is not copied
+  echo "note: $SIM_DIR is not a git checkout; trusting it is $SIM_SHA"
+fi
+if stage sim1802 "$SIM_SHA"; then
+  log "build sim1802 cdp1802-nuttx fork @ $SIM_SHA"
+  build_sim "$SIM_DIR" "$TARGET-sim"
   done_stage sim1802 "$SIM_SHA"
 fi
 

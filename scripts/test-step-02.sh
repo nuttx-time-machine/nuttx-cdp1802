@@ -8,6 +8,9 @@ cd "$(dirname "$0")/.."
 . scripts/env.sh
 
 T=$CDP1802_TARGET
+# Step 02 audits *upstream* sim1802; the fork (ADR 0003) changes some of
+# the audited behaviour on purpose.
+export SIM=$T-sim-upstream
 S=toolchain/tests/sim-audit
 B=build/step02
 mkdir -p "$B"
@@ -55,7 +58,7 @@ probe wp   0 "wrote to .text"               # no _fini => no write protection
 probe halt 42 ""                            # HALT command status -> exit code
 
 # 3. No cycle counter anywhere in the simulator sources.
-if grep -qi 'cycle' <(sed 's/%.*//' toolchain/work/sim1802/src/*.erl); then
+if grep -qi 'cycle' <(sed 's/%.*//' toolchain/work/sim1802/src/*.erl 2>/dev/null); then
   echo "note: 'cycle' appears in sim1802 code (not only comments); re-audit"
 fi
 

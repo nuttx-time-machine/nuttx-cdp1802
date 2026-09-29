@@ -20,10 +20,18 @@ LIBC_URL=https://github.com/mikpe/cdp1802-elf-libc.git
 LIBC_BRANCH=master
 LIBC_SHA=833e87f23663be5a958e2f805a163c6630ef5c51
 
-# sim1802 simulator (Apache-2.0, written in Erlang)
-SIM_URL=https://github.com/mikpe/sim1802.git
-SIM_BRANCH=master
-SIM_SHA=3b28ed21695bef829da09ae7ba3a933e0c858af6
+# sim1802 simulator (Apache-2.0, written in Erlang), cdp1802-nuttx fork
+# (ADR 0003): cycle timing, deterministic timer, console input.  The fork
+# lives in the simulator/ submodule; it is not published yet (amendment A4),
+# so it is built from the submodule, which must be checked out at SIM_SHA.
+SIM_SRC=simulator
+SIM_BRANCH=cdp1802-nuttx
+SIM_SHA=55b6d99205873ad2644d858dda36508fa4f52e11
+
+# Upstream sim1802, installed as $TARGET-sim-upstream.  Step 02 audits it.
+SIM_UPSTREAM_URL=https://github.com/mikpe/sim1802.git
+SIM_UPSTREAM_BRANCH=master
+SIM_UPSTREAM_SHA=3b28ed21695bef829da09ae7ba3a933e0c858af6
 
 # buildcross (GPL-3.0). Recorded for reference only: it has no cdp1802
 # recipe at this SHA, so it is NOT used (see docs/adr/0002).
