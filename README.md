@@ -17,7 +17,7 @@ It has two goals of equal weight (see [`CONTRACT.md`](CONTRACT.md)):
 | 01 | `step-01-toolchain` | Toolchain built from pinned SHAs, hello + soft-float in the simulator, ABI documented | done |
 | 02 | `step-02-sim-audit` | Simulator capability audit (**GATE**) | report done — **waiting for decision** |
 | 03 | `step-03-board` | Virtual board (ROM boot like real HW), sim1802 fork, register convention | done |
-| 04 | — | Size feasibility (**GATE**) | — |
+| 04 | `step-04-size-gate` | Size feasibility (**GATE**) | report done: **does not fit HW32/32 (2.3×) — waiting for decision** |
 | 05 | — | Architecture skeleton links | — |
 | 06 | — | Boot banner from `nx_start()` | — |
 | 07 | — | Interrupts and system timer | — |

@@ -31,3 +31,6 @@ step tag that depends on it was not objected to. The agent writes new ADRs as
 | [0005](0005-sim1802-board.md) | sim1802 board: boots the raw ROM image like the real machine; SIM64 / HW32/32 profiles; devices | Accepted (Alan) |
 | [0006](0006-register-convention.md) | Register convention: R0 free for DMA, R1 interrupt PC, R2 always a valid stack, R3 PC | Accepted (Alan) |
 | [0007](0007-gcc-interrupt-safe-sp.md) | Patch GCC so that stack-pointer updates are interrupt-safe | Accepted (Alan) |
+| [0008](0008-compiler-h-cdp1802.md) | Common code: 16-bit memory model for the CDP1802 in compiler.h | Proposed — needs Alan (common-code change) |
+| [0009](0009-compact-64bit-division.md) | Compact 64-bit division helpers in arch/cosmac | Proposed (agent) |
+| [0010](0010-gcc-workaround-flags.md) | Work around toolchain issue 0002 with -fno-split-wide-types | Proposed (agent) |

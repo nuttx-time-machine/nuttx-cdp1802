@@ -15,7 +15,7 @@ git tag of this repository where the concept first shows up in code, so you can
 | # | Chapter | First tag | Status |
 |---|---------|-----------|--------|
 | 1 | What a NuttX port consists of | step-00-bootstrap | not written |
-| 2 | Before you start: toolchain requirements and measuring feasibility | step-04 | not written |
+| 2 | [Before you start: toolchain requirements and measuring feasibility](02-before-you-start.md) | step-04-size-gate | written (Step 04) |
 | 3 | Understanding your CPU and its ABI | step-01-toolchain | not written |
 | 4 | Choosing or defining a target and a memory map | step-03 | not written |
 | 5 | The arch directory | step-05 | not written |
