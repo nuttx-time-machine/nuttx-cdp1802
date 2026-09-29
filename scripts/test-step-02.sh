@@ -33,6 +33,11 @@ echo "wall-clock for 21 timer ticks: ${elapsed}s"
   || fail "timer no longer looks like a 10 Hz wall-clock timer"
 echo "ok: interrupts, IE readback, 10 Hz wall-clock timer"
 
+# 1b. LSIE-based up_irq_save()/up_irq_restore() sketch (journal step-02, Q4).
+$T-gcc -Os -Wall -Werror -o "$B/irqsave.elf" "$S/irqsave.c" "$S/irqsave.S" "$S/sim_io.S"
+[ "$(scripts/run.sh "$B/irqsave.elf")" = "irqsave: PASS" ] || fail "LSIE irq save/restore sketch"
+echo "ok: LSIE-based irq save/restore"
+
 # 2. I/O and ISA probes: "expected status|expected output line".
 probe() {
   local arg=$1 want_rc=$2 want_out=$3 out rc
