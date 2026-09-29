@@ -165,6 +165,16 @@ if stage sim1802 "$SIM_SHA"; then
   done_stage sim1802 "$SIM_SHA"
 fi
 
+# ---------------------------------------------------------------- short names
+# Amendment A3 (accepted): the contract names the tools cdp1802-elf-*.  The
+# canonical triplet stays cdp1802-unknown-elf (mikpe's libc and sim1802
+# expect it); cdp1802-elf-* are symlinks to the same binaries.  The GCC
+# driver resolves its own path through symlinks, so it finds cc1/as/ld.
+for tool in "$PREFIX/bin/$TARGET-"*; do
+  short="$PREFIX/bin/cdp1802-elf-${tool##*/$TARGET-}"
+  ln -sfn "${tool##*/}" "$short"
+done
+
 log "done. Add to PATH: $PREFIX/bin:$PREFIX/otp/bin"
-"$PREFIX/bin/$TARGET-gcc" --version | head -1
-"$PREFIX/bin/$TARGET-as" --version | head -1
+"$PREFIX/bin/cdp1802-elf-gcc" --version | head -1
+"$PREFIX/bin/cdp1802-elf-as" --version | head -1

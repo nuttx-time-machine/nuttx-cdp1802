@@ -19,6 +19,10 @@ command -v $T-gcc > /dev/null || fail "$T-gcc not on PATH; run toolchain/build-t
 command -v $T-sim > /dev/null || fail "$T-sim not on PATH; run toolchain/build-toolchain.sh"
 $T-gcc --version | head -1
 [ "$($T-gcc -print-multi-directory)" = 1802 ] || fail "default multilib is not 1802"
+# Amendment A3: the contract's cdp1802-elf-* names must exist too.
+for t in gcc as ld size nm objdump objcopy readelf sim; do
+  command -v cdp1802-elf-$t > /dev/null || fail "cdp1802-elf-$t missing (amendment A3)"
+done
 
 # expect <name> <expected-output-file-content>
 run_expect() {
