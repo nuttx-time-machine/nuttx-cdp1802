@@ -21,8 +21,9 @@ grep -v "will not fit in region\|HW32/32: ROM overflow\|overflowed by" "$d" \
   | grep . && fail "unexpected diagnostics (see $d)"
 grep -q "HW32/32: ROM overflow" "$d" || fail "expected the HW32/32 ROM overflow"
 rom=$(sed -n 's/^ROM (text+rodata+data) = \([0-9]*\) bytes.*/\1/p' build/step04-minimal/size.txt)
-echo "minimal (-Os, workaround): ROM $rom bytes"
-[ "$rom" -gt 65536 ] || fail "ROM $rom: the report says the default build exceeds 64 KiB"
+echo "minimal (-Os, workaround, 32-bit time): ROM $rom bytes"
+[ "$rom" -gt 49152 ] && [ "$rom" -lt 65536 ] \
+  || fail "ROM $rom: the report says 48 KiB < default build < 64 KiB (after ADR 0011)"
 grep -q "libgcc.a" build/step04-minimal/size.txt || fail "no libgcc in size report"
 libgcc=$(awk '$1=="libgcc.a"{print $6}' build/step04-minimal/size.txt)
 [ "$libgcc" -lt 4000 ] || fail "libgcc contributes $libgcc bytes: 64-bit division not replaced?"
@@ -31,8 +32,15 @@ echo "ok: compiles cleanly, links except for ROM overflow; libgcc $libgcc bytes"
 # 2. The same without the workaround (the smallest -Os measurement).
 scripts/build.sh sim1802:minimal step04-minimal-nowa COSMAC_GCC_WORKAROUNDS= > /dev/null
 rom2=$(sed -n 's/^ROM (text+rodata+data) = \([0-9]*\) bytes.*/\1/p' build/step04-minimal-nowa/size.txt)
-echo "minimal (-Os, no workaround): ROM $rom2 bytes"
-[ "$rom2" -gt 32768 ] && [ "$rom2" -lt 65536 ] || fail "ROM $rom2 outside (32 KiB, 64 KiB)"
+echo "minimal (-Os, no workaround, 32-bit time): ROM $rom2 bytes"
+[ "$rom2" -gt 49152 ] && [ "$rom2" -lt 65536 ] || fail "ROM $rom2 outside (48 KiB, 64 KiB)"
+
+# 2b. HW48/16 profile (ADR 0012): does not fit flat either.
+printf '%s\n' '# CONFIG_BOARD_SIM1802_PROFILE_HW32 is not set' 'CONFIG_BOARD_SIM1802_PROFILE_HW48=y' \
+  'CONFIG_RAM_START=0xc000' 'CONFIG_RAM_SIZE=16384' > build/hw48.frag
+BUILD_FRAGMENT=$PWD/build/hw48.frag scripts/build.sh sim1802:minimal step04-hw48 > /dev/null
+grep -q "HW48/16: ROM overflow" build/step04-hw48/diagnostics.txt || fail "expected the HW48/16 ROM overflow"
+echo "ok: HW48/16 $(grep -o 'overflowed by [0-9]* bytes' build/step04-hw48/diagnostics.txt)"
 
 # 3. 64-bit division vectors with the workaround flag.
 D=toolchain/tests/div64; B=build/step04-div64; mkdir -p "$B"
