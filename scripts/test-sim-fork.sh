@@ -56,10 +56,11 @@ echo "ok: console input (polled, IRQ 6, delayed chunks, EOF)"
 # 5. ROM emulation: __sim1802_rom_end write-protects [0, limit).
 printf '.global __sim1802_rom_end\n.set __sim1802_rom_end, 0x8000\n' > "$B/romend.s"
 $T-gcc -Os -o "$B/probe-rom.elf" "$A/probe.c" "$A/sim_io.S" "$B/romend.s" -Wl,-Tdata=0x8000
-set +e; out=$(scripts/run.sh "$B/probe-rom.elf" wp 2>&1); rc=$?; set -e
+# (ELF-loader path: the program takes argv, which ROM mode cannot provide)
+set +e; out=$(RUN_MODE=elf scripts/run.sh "$B/probe-rom.elf" wp 2>&1); rc=$?; set -e
 [ $rc -eq 97 ] && grep -q 'write to write-protected address' <<< "$out" \
   || fail "ROM write not trapped ($rc)"
-set +e; scripts/run.sh "$B/probe-rom.elf" halt; rc=$?; set -e
+set +e; RUN_MODE=elf scripts/run.sh "$B/probe-rom.elf" halt; rc=$?; set -e
 [ $rc -eq 42 ] || fail "program with protected ROM does not run ($rc)"
 echo "ok: __sim1802_rom_end write protection"
 
