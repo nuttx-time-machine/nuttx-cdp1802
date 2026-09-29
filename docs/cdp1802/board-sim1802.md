@@ -117,6 +117,36 @@ Rules and constraints, each checked by `scripts/test-step-03.sh`:
   byte *below* the last pushed byte (ABI), so the highest usable stack byte of
   an empty stack at `top` is `top` itself with SP = `top`.
 
+### 3.1 HWB: code banking (Step 06b, ADR 0013)
+
+```
+ 0xFFFF +---------------------------+
+        | heap / stacks             |   RAM 16 KiB
+        | .bss / .data              |
+ 0xC000 +===========================+
+        | bank window: bank n of    |   selected by the latch on OUT 1
+        | the ROM (16 KiB)          |   (CONFIG_COSMAC_BANK_PORT)
+ 0x8000 +===========================+
+        | (0xFF fill)               |
+        | .data initial values      |   fixed ROM 32 KiB
+        | .rodata, far-call stubs   |
+        | .text not in a bank       |
+ 0x0000 | .reset                    |
+        +---------------------------+
+  nuttx.bin = fixed ROM (32 KiB) + bank 0 + bank 1 + ...  (16 KiB each)
+```
+
+- The simulator maps it with `--banks N` (`scripts/run.sh` takes N from the
+  `__sim1802_banks` symbol). The bank latch powers up with a random value, so
+  the reset code selects bank 0 before any banked code runs
+  (`cosmac_bank_initialize`).
+- Hardware equivalent: one large EPROM (e.g. 128 KiB). While the CPU
+  addresses 0x8000–0xBFFF, the EPROM address lines above A13 come from a
+  latch written by `OUT 1`, offset past the fixed 32 KiB. This is our
+  description of the scheme; no circuit has been built or tested.
+- Placement: `boards/cosmac/cdp1802/sim1802/scripts/banks.txt`, report in
+  `nuttx.banks` (see ADR 0013 and porting-guide chapter 15).
+
 ## 4. I/O devices
 
 All devices are behind the simulator's I/O controller on **two ports**:

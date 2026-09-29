@@ -28,7 +28,7 @@ git tag of this repository where the concept first shows up in code, so you can
 | 12 | Signals and task exit | step-08 | not written |
 | 13 | The console and serial driver | step-09 | not written |
 | 14 | Validation: ostest and step tests | step-09 | not written |
-| 15 | Size optimisation techniques | step-04 | not written |
+| 15 | [Size optimisation techniques](15-size-optimisation.md) | step-04-size-gate, step-06b-banking | written (Step 06b) |
 | 16 | Preparing a port for upstream | step-11 | not written |
 
 Chapters are written during the step that introduces their topic. They are

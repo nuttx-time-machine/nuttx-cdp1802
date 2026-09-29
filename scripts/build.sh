@@ -9,7 +9,8 @@
 #
 # Results in build/<name>/ (name defaults to the config with ':' -> '-'):
 #   nuttx.elf, nuttx.map, nuttx.bin (the ROM image, objcopy -O binary),
-#   build.log, size.txt (scripts/size-report.py), sp-safety.txt
+#   build.log, size.txt (scripts/size-report.py), sp-safety.txt, and for
+#   banked profiles nuttx.banks (the placement report)
 # Exit status: that of make (a ROM overflow is a failed link, but the map
 # and size report are still produced for the feasibility measurements).
 #
@@ -47,11 +48,12 @@ make -j"$(nproc)" "$@" > "$top/$out/build.log" 2>&1
 rc=$?
 cp .config "$top/$out/config"
 [ -f nuttx.map ] && cp nuttx.map "$top/$out/nuttx.map"
+[ -f nuttx.banks ] && cp nuttx.banks "$top/$out/nuttx.banks"
 for f in nuttx.elf nuttx; do
   [ -f "$f" ] && cp "$f" "$top/$out/nuttx.elf" && break
 done
 if [ -f "$top/$out/nuttx.elf" ] && grep -q "^CONFIG_ARCH_COSMAC=y" .config; then
-  "$CDP1802_TARGET-objcopy" -O binary nuttx.elf "$top/$out/nuttx.bin"
+  "$CDP1802_TARGET-objcopy" -O binary --gap-fill 0xff nuttx.elf "$top/$out/nuttx.bin"
   python3 "$top/scripts/check-sp-safety.py" --allow __start "$top/$out/nuttx.elf" \
     > "$top/$out/sp-safety.txt" 2>&1 || true
 fi

@@ -20,7 +20,7 @@ It has two goals of equal weight (see [`CONTRACT.md`](CONTRACT.md)):
 | 04 | `step-04-size-gate` | Size feasibility (**GATE**) | done — does not fit HW32/32 flat; Alan chose banking, mikpe report, 32-bit time, HW48/16 (amendment A5) |
 | 05 | `step-05-skeleton` | Architecture skeleton links (SIM64) | done |
 | 06 | `step-06-boot` | Boot from the raw ROM image to the idle loop (SIM64) | done |
-| 06b | — | Code banking and the banked HWB profile (ADR 0013, amendment A5) | next |
+| 06b | `step-06b-banking` | Code banking: bank window, trampoline, placement tool, HWB profile (ADR 0013) | done |
 | 07 | — | Interrupts and system timer | — |
 | 08 | — | Context switching | — |
 | 09 | — | Serial driver and `ostest` | — |

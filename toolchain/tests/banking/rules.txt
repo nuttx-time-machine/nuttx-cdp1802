@@ -1,0 +1,4 @@
+# Placement rules for the code-banking test: <bank>|auto|fixed archive:member
+0 libbanktest.a:bank_a.o
+1 libbanktest.a:bank_b.o
+2 libbanktest.a:bank_c.o

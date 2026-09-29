@@ -1,6 +1,6 @@
 # 0013 — Code banking: fixed ROM + one 16 KiB bank window, stubs and a bank return stack
 
-Status: Accepted as the approach (Alan chose option A at the Step 04 gate); this design is Proposed (agent)
+Status: Accepted as the approach (Alan chose option A at the Step 04 gate); design Proposed (agent), implemented at step-06b (see "As implemented")
 Date: 2026-09-29
 Step: step-06b (implementation)
 
@@ -80,10 +80,11 @@ consistent state.
 
 ## Consequences
 
-- Cross-bank calls cost the trampoline (roughly 40–60 instructions; measured
-  in Step 06b) and 3 BRS bytes per nesting level per thread.
+- Cross-bank calls cost the trampoline (estimated 40–60 instructions; measured
+  at Step 06b: 398 machine cycles more than a near call, see below) and
+  3 BRS bytes per nesting level per thread.
 - About 11 bytes of fixed ROM per banked function that is referenced from
-  outside its object.
+  outside its object (6 bytes as implemented).
 - `setjmp`/`longjmp` across a far call would unbalance the BRS; the arch's
   setjmp must save/restore the BRS pointer (Step 06b/09).
 - The simulator fork gets a bank-switched ROM window in `--rom` mode; the ROM
@@ -91,8 +92,69 @@ consistent state.
 - Placement rules and the tool's report become part of the board. The size
   budget adds "fixed ROM used" and "banks used".
 
+## As implemented (step-06b)
+
+The design above was followed, with these changes found while implementing:
+
+1. **Stub = NCRT call with inline data, 6 bytes** instead of 11:
+   `foo: sep 4 ; .hword __cosmac_farcall ; .hword __bank_foo ; .byte BANK`.
+   The trampoline reads the target and bank through the stub's return
+   address, and the slot of that return address is exactly where the target
+   must go for the final `sep 5`. R6 is not needed to pass anything.
+2. **The trampolines run with interrupts disabled** from `LSIE` to the final
+   `RET`. The stack, the RAM shadow and the latch must change together, and
+   the only free registers are D and R6. Disabling interrupts is simpler than
+   a lock-free design, and it lets the trampolines share scratch bytes in
+   `g_cosmac_bankstate`. The entry IE and DF are kept in one byte
+   (`shlc` … `shr`), so DF is preserved even though the trampolines do
+   arithmetic. Interrupts are masked for at most about 210 machine cycles.
+3. **BRS state:** `g_cosmac_bankstate` = {BRS pointer, free entries, bank,
+   scratch}. The first four bytes are per thread (saved by the context switch
+   from Step 08). Overflow calls `cosmac_brs_overflow()` → PANIC. The default
+   depth is 16 (`CONFIG_COSMAC_BRS_DEPTH`).
+4. **Tool rules** (`tools/cosmac/cosmac_bank.py`):
+   - A *call* is a 16-bit relocation after `sep 4` (0xD4) or after a long
+     branch (0xC0–0xC3, 0xC9–0xCB: tail calls). The survey of all libraries
+     found no helper with inline arguments after its call word, so the
+     trampoline cannot break an inline-argument convention. The libgcc
+     compare helpers are followed by a normal long branch.
+   - An object stays fixed if it takes the address of one of its own
+     functions, has code outside `.text*`, or defines a symbol defined
+     elsewhere too.
+   - Placement: explicit bank, `auto` (first-fit decreasing by the code the
+     object keeps in a measuring link), or `fixed`.
+   - The generated linker fragment uses `OVERLAY … NOCROSSREFS`, so a direct
+     reference between two banks is a link error. Each bank is padded to
+     16 KiB.
+5. **Bank port:** `OUT 1` by default (`CONFIG_COSMAC_BANK_PORT`, 1–5). Ports
+   6 and 7 belong to the sim1802 I/O controller.
+
+**Measured** (step-06b, `docs/journal/step-06b.md`):
+
+| | machine cycles |
+|--|--:|
+| loop of 1000 near calls (`fixed_inc`), per iteration | 72.7 |
+| loop of 1000 far calls (`b_inc` in bank 1), per iteration | 470.7 |
+| **extra cost of a far call + return** | **398** (the listing gives farcall 208 + farret 133 + one more NCRT call and return, 52) |
+| interrupt routine making 2 far calls (test) | about 1 170 |
+| `sim1802:boot` to the idle loop: SIM64 flat / HWB banked | 449 804 / 525 878 (+17 %) |
+
+The estimate above (40–60 instructions) was too low: the trampolines
+execute 102 and 65 instructions. The 1802 moves 16-bit values one byte
+at a time, through D and one free register.
+
+**Consequence found for Step 07:** an interrupt routine that calls C (and
+therefore the stubs) must save R4/R5 and reload them with the NCRT entry
+points. The interrupt may arrive while P=4 or P=5, with R4/R5 pointing
+into the middle of the routine (see also abi.md §4). The banking test's
+interrupt routine does this (`toolchain/tests/banking/isr_bank.S`).
+
 ## How to revisit
 
 If flat HW48/16 becomes feasible (compiler fix), banking can be switched off
 per profile. If stubs cost too much fixed ROM, add placement rules that keep
-callers and callees together.
+callers and callees together. If far calls dominate run time (Step 09
+measurements), options are: placement rules that keep hot call chains in one
+bank or fixed; a page-aligned per-thread BRS so that the pointer update is
+one byte; or `-march=1804` register instructions in the trampolines
+(`RLXA`/`RSXD`, CDP1804AC boards only).

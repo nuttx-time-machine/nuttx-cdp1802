@@ -6,6 +6,7 @@
 # is converted to the raw ROM binary (<elf>.bin, the bytes an EPROM would
 # hold) and started with --rom; --rom-size is __sim1802_rom_end and the ELF
 # only provides symbol names (--symbols).  See docs/cdp1802/board-sim1802.md.
+# Banked images also define __sim1802_banks, passed as --banks.
 #
 # Other programs (the mikpe-libc validation programs of Steps 01-02) are run
 # through the simulator's ELF loader, as before.  RUN_MODE=elf forces that
@@ -30,8 +31,11 @@ for i in "${!args[@]}"; do
   rom_end=$("$CDP1802_TARGET-nm" "$elf" 2> /dev/null \
             | awk '$3 == "__sim1802_rom_end" { print $1 }')
   if [ -n "$rom_end" ] && [ "${RUN_MODE:-rom}" = rom ]; then
-    "$CDP1802_TARGET-objcopy" -O binary "$elf" "$elf.bin"
+    "$CDP1802_TARGET-objcopy" -O binary --gap-fill 0xff "$elf" "$elf.bin"
     rom=("--rom" "$elf.bin" "--rom-size" "$((16#$rom_end))" "--symbols" "$elf")
+    # Banked images (ADR 0013): the bank count for the simulator's window
+    banks=$("$CDP1802_TARGET-nm" "$elf" | awk '$3 == "__sim1802_banks" { print $1 }')
+    [ -z "$banks" ] || rom+=("--banks" "$((16#$banks))")
     [ $((i + 1)) -eq ${#args[@]} ] \
       || { echo "$0: program arguments are not supported in ROM mode" >&2; exit 2; }
     args=("${args[@]:0:$i}" "${rom[@]}")
