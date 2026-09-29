@@ -250,10 +250,14 @@ cmd_then_11:
 ; ISR, the standard R2-stack form [MPM-201A p. 65, Fig. 76]: entry with
 ; P=1, X=2, IE=0.  DEC 2 first, because the interrupted code may be using
 ; M(R2) (compiled code keeps a scratch byte there).  Frame, from the top:
-;   T (X,P of the interrupted code), D, DF, R15.0, R15.1
+;   T (X,P of the interrupted code), D, DF, R15.0, R15.1, BUF
+; BUF is the I/O controller's shared argument buffer: the interrupted code
+; may be between its OUT 6 (argument) and OUT 7 (command), so the handler
+; restores it before returning (board-sim1802.md §4).
 ; RET at the end restores X,P from T and sets IE=1; because the exit code
 ; sits right before the entry, R1 is left pointing at isr_entry again.
 isr_exit:
+	out	6		; restore the I/O buffer (pops BUF)
 	lda	2		; R15.1
 	phi	15
 	lda	2		; R15.0
@@ -276,6 +280,8 @@ isr_entry:
 	ghi	15
 	dec	2
 	str	2		; push R15.1
+	dec	2
+	inp	6		; push the I/O buffer (INP stores to M(R2))
 
 	ldi	%hi(ticks)	; ticks++
 	phi	15

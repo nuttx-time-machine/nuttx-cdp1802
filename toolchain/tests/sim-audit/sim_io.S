@@ -85,16 +85,21 @@ isr_install:
 	plo	0
 	sep	5
 
-; Interrupt service routine.  Entry: P=1, X=2, IE=0, T=(X,P) of the
-; interrupted code.  Layout of the save area (R0-relative):
+; Interrupt service routine (Step 02 audit harness; it predates ADR 0006 and
+; saves state through R0, which is fine in the simulator: it has no DMA).
+; Entry: P=1, X=2, IE=0, T=(X,P) of the interrupted code.  Save area
+; (R0-relative):
 ;   isr_save_top    : T
 ;   isr_save_top-1  : D
 ;   isr_save_top-2  : DF (bit 0)
-;   isr_save_top-3  : irq_count (low byte counter, also exported)
-;   isr_save_top-4  : scratch for OUT/INP
-;   isr_save_top-5  : irq_mask, IRQs re-enabled after each acknowledge
+;   isr_save_top-3  : the I/O argument buffer of the interrupted code, which
+;                     may be between its OUT 6 and OUT 7
+;   isr_save_top-4  : irq_count (low byte counter, also exported)
+;   isr_save_top-5  : scratch for OUT/INP
+;   isr_save_top-6  : irq_mask, IRQs re-enabled after each acknowledge
 isr_exit:
-	inc	0		; -> DF slot
+	inc	0		; -> buffer slot
+	out	6		; restore the I/O buffer, R0 -> DF slot
 	ldxa			; D := saved DF byte, R0 -> D slot
 	shr			; DF := bit 0
 	ldxa			; D := saved D, R0 -> T slot
@@ -106,7 +111,9 @@ isr_entry:			; R1 points here after RET above
 	dec	0
 	stxd			; save D
 	shlc			; D.0 := DF
-	stxd			; save DF, R0 -> counter
+	stxd			; save DF, R0 -> buffer slot
+	inp	6		; save the I/O buffer
+	dec	0		; R0 -> counter
 	ldx
 	adi	1
 	str	0		; irq_count++
@@ -131,10 +138,11 @@ isr_entry:			; R1 points here after RET above
 	.global	irq_count
 	.global	irq_mask
 irq_mask:
-	.byte	0x01		; mask      (isr_save_top-5)
-	.byte	0		; scratch   (isr_save_top-4)
+	.byte	0x01		; mask      (isr_save_top-6)
+	.byte	0		; scratch   (isr_save_top-5)
 irq_count:
-	.byte	0		; counter   (isr_save_top-3)
+	.byte	0		; counter   (isr_save_top-4)
+	.byte	0		; I/O buffer (isr_save_top-3)
 	.byte	0, 0		; DF, D
 isr_save_top:
 	.byte	0		; T
