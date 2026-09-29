@@ -33,7 +33,12 @@ has a status: **Proposed** (waiting for Alan), **Accepted** or **Rejected**.
 
 ## A4 — Simulator fork location (Accepted by Alan, 2026-09-29)
 
-- Alan approved forking sim1802 (ADR 0003). Following A2, the fork is a local
-  git repository used as the `simulator/` submodule, with branch
-  `cdp1802-nuttx` based on mikpe/sim1802 `3b28ed21695b`. It is not published
-  until Alan chooses a location.
+- Alan approved forking sim1802 (ADR 0003) and asked for a local git
+  repository that he will publish on GitHub later. The fork is the
+  `simulator/` submodule, with branch `cdp1802-nuttx` based on mikpe/sim1802
+  `3b28ed21695b`.
+- Until it is published, `.gitmodules` points at mikpe's repository, which
+  does not contain the fork commits, and `toolchain/VERSIONS` builds the
+  simulator from the submodule working tree (`SIM_SRC=simulator`).
+- To publish: push `cdp1802-nuttx` to the new repository, then
+  `git submodule set-url simulator <url>` and commit. Nothing else changes.

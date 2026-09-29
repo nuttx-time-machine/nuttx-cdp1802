@@ -243,3 +243,17 @@ Alan asked whether newlib could replace mikpe's GPL libc, and noted that NuttX h
   - The GCC rebuild took 3 min 24 s. `test-step-01.sh` and `test-step-02.sh` pass.
 - Decision recorded in [ADR 0004](../adr/0004-libc-independence.md).
 - Docker image rebuilt with the new GCC configuration (`nuttx-cdp1802-toolchain:latest`). `scripts/test-step-01.sh` passes inside it, including the `cdp1802-elf-*` name check.
+
+### Q4 decision (Alan, 2026-09-29)
+
+"use LSIE by default, but add the option to use software interrupt-enable
+flag. That option should be later selected on NuttX Kconfig."
+
+→ Step 07 implements both behind a Kconfig choice in `arch/cosmac/Kconfig`,
+e.g. `COSMAC_IRQSTATE_LSIE` (default) and `COSMAC_IRQSTATE_SWFLAG`. Both are
+covered by the Step 07 ADR and the step tests. The software-flag variant must
+keep the flag coherent with the hardware IE on interrupt entry/exit and on
+context switch. The ADR will list those update points.
+
+Alan also asked for the sim1802 fork to be a local git repository that he
+will publish on GitHub later (amendment A4).
