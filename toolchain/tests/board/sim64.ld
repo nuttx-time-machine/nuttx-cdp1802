@@ -1,8 +1,10 @@
 /* sim64.ld — sim1802 board, SIM64 profile (docs/cdp1802/board-sim1802.md):
- * the whole 64 KiB address space; read-only code and data start at the
- * reset vector 0x0000 and are write-protected, RAM is everything after.
- * .data is loaded in place (load address = run address), so the start-up
- * copy loop does nothing.  Prototype for the NuttX linker script of Step 05.
+ * a development board with exactly as much ROM as the image needs and RAM
+ * for the rest of the 64 KiB.  The ROM image (reset code, .text, .rodata and
+ * the initial values of .data) starts at the reset vector 0x0000; .data is
+ * copied to RAM at start-up, exactly as in HW32/32.  The ROM size is the
+ * symbol __sim1802_rom_end, which scripts/run.sh passes as --rom-size.
+ * Prototype for the NuttX linker script of Step 05.
  */
 
 OUTPUT_ARCH(cdp1802)
@@ -22,17 +24,17 @@ SECTIONS
     *(.rodata .rodata.*)
   } > mem
 
-  /* sim1802 fork: write-protect everything read-only */
-  __sim1802_rom_end = .;
+  _eronly = .;                  /* ROM copy of .data starts here */
 
-  .data :
+  /* RAM starts right after the ROM image (read-only part + .data copy) */
+  .data _eronly + SIZEOF(.data) : AT(_eronly)
   {
     _sdata = .;
     *(.data .data.*)
     _edata = .;
   } > mem
 
-  _eronly = LOADADDR(.data);    /* == _sdata: nothing to copy */
+  __sim1802_rom_end = _sdata;   /* ROM = [0, _sdata), write-protected */
 
   .bss (NOLOAD) :
   {
@@ -42,6 +44,5 @@ SECTIONS
     _ebss = .;
   } > mem
 
-  /* the sim1802 loader rejects loadable bytes above 0xFF00 */
-  ASSERT(_edata <= 0xFF00, "sim1802: loadable image must end below 0xFF00")
+  ASSERT(_eronly == LOADADDR(.data), "sim64: .data load address")
 }

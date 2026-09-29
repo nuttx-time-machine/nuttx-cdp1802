@@ -29,6 +29,7 @@ main:
 	plo	2
 	sex	2
 
+#ifndef SMOKE_NO_DATA_COPY	/* negative test: RAM is not zero at power-on */
 	; copy .data: R8 = _eronly (ROM), R9 = _sdata, R10 = _edata
 	ldi	%hi(_eronly)
 	phi	8
@@ -57,6 +58,7 @@ main:
 	inc	9
 	lbr	1b
 
+#endif
 	; clear .bss: R9 = _sbss, R10 = _ebss
 3:	ldi	%hi(_sbss)
 	phi	9
