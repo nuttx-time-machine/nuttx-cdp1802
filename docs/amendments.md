@@ -42,3 +42,20 @@ has a status: **Proposed** (waiting for Alan), **Accepted** or **Rejected**.
   simulator from the submodule working tree (`SIM_SRC=simulator`).
 - To publish: push `cdp1802-nuttx` to the new repository, then
   `git submodule set-url simulator <url>` and commit. Nothing else changes.
+
+## A5 — Revised plan after the Step 04 gate (Accepted by Alan, 2026-09-29: options A, B, C and a 48/16 profile)
+
+The minimal kernel does not fit HW32/32 (journal step-04). Alan chose:
+code banking (A), compiler improvements with mikpe (B) and local 32-bit time
+plus trimming (C), and asked to consider a 48 KiB ROM / 16 KiB RAM split.
+The step plan changes as follows:
+
+| Step | Contract | Revised |
+|------|----------|---------|
+| 05 | skeleton links an ELF | unchanged; links in the **SIM64** profile (with `SYSTEM_TIME32`: 62 KB ROM, 3.5 KB RAM) |
+| 06 | boot banner | unchanged, in SIM64 |
+| **06b** (new) | — | **Code banking**: sim1802 fork bank window, placement/stub tool, far-call trampoline and bank return stack, profile HWB (32 KiB fixed ROM + 16 KiB window + 16 KiB RAM). Exit: the Step 06 banner boots from a banked ROM image, plus a stress test of cross-bank calls with interrupts. |
+| 07–10 | as in the contract | on the **HWB** profile |
+
+The contract's feasibility profile HW32/32 is kept in the size budget as the
+reference answer ("does not fit"). HW48/16 (flat) and HWB are added.

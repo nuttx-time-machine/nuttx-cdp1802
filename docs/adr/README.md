@@ -34,3 +34,6 @@ step tag that depends on it was not objected to. The agent writes new ADRs as
 | [0008](0008-compiler-h-cdp1802.md) | Common code: 16-bit memory model for the CDP1802 in compiler.h | Proposed — needs Alan (common-code change) |
 | [0009](0009-compact-64bit-division.md) | Compact 64-bit division helpers in arch/cosmac | Proposed (agent) |
 | [0010](0010-gcc-workaround-flags.md) | Work around toolchain issue 0002 with -fno-split-wide-types | Proposed (agent) |
+| [0011](0011-system-time32.md) | Common code: opt-in 32-bit system time (CONFIG_SYSTEM_TIME32) | Accepted (Alan, option C) |
+| [0012](0012-profile-hw48.md) | Memory profile HW48/16 | Accepted (Alan) |
+| [0013](0013-code-banking.md) | Code banking: fixed ROM + 16 KiB window, stubs, bank return stack | Approach accepted (option A); design proposed |

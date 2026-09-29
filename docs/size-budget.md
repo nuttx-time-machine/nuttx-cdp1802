@@ -17,3 +17,5 @@ Memory profiles (defined in Step 03: `docs/cdp1802/board-sim1802.md`, ADR 0005):
 | 02 | — | — | — | — | — | — | — | — | — | — | No NuttX image yet (simulator audit only) |
 | 03 | board smoke test (`smoke.S`, no NuttX) | 346 | (in .text) | 1 | 4 | 347 | 5 | — | ✅ | ✅ | No NuttX image yet; freestanding board smoke test (ROM image 347 B incl. `.data` copy) |
 | 04 | `sim1802:minimal` (-Os + `-fno-split-wide-types`, HW32/32) | 74 663 | 463 | 55 | 501 | 75 181 | 556 | libsched 33.7 KB, libc 16.2 KB, libfs 13.1 KB | ❌ (> 64 KiB) | ❌ (2.29×) | First NuttX image. Does not link: ROM overflow by 42 416 bytes. Without the wrong-code workaround: 62 016 B (fits neither). See journal step-04 for all variants |
+| 04+ | `sim1802:minimal` + `SYSTEM_TIME32` (ADR 0011), HW32/32 | 61 5xx | 463 | 55 | 489 | 61 978 | 544 | libsched, libc, libfs | ❌ (3.5 KB RAM left) | ❌ (1.89×) | After the gate: -13.2 KB from 32-bit time. Without the issue-0002 workaround: 56 587 |
+| 04+ | same, **HW48/16** (ADR 0012) | — | — | — | — | 61 978 | 544 | — | — | HW48/16: ❌ over by 12 828 | Flat 48 KiB needs ~13 KB less: the compiler fix (issue 0002) alone gives ~5.4 KB |

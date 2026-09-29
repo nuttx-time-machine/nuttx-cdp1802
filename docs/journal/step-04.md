@@ -337,3 +337,18 @@ C is a fallback if Alan prefers a quick "hello" demonstration in SIM64.
 
 About 4 h wall-clock, including roughly 1.5 h of builds (the `-O2` build and
 the torture runs dominate).
+
+## Gate outcome (Alan, 2026-09-29)
+
+"Went all these options: A to C. Also consider the option 16KB RAM and 48KB
+ROM to alleviate the pressure."
+
+| Item | Done |
+|------|------|
+| **C** — 32-bit time | Opt-in `CONFIG_SYSTEM_TIME32` (a common-code change, ADR 0011). Upstream removed `SYSTEM_TIME64` in `c6654b1106` (2026-05-03); reverting that commit touches 187 files with conflicts, so the option only restores the types (`sys/types.h`) and `CLOCK_MAX` (`limits.h`). The `sim1802:minimal` defconfig enables it. Clean build, 0 warnings: **61 978 bytes** (workaround on). |
+| **HW48/16** | New profile (ADR 0012): 48 KiB ROM at 0, 16 KiB RAM at 0xC000. Minimal build with 32-bit time: **overflow by 12 828 bytes** (61 978 > 49 152). Without the issue 0002 workaround it would be about 7.4 KB over; with the CDP1804 ISA as well, about 5 KB. A fixed compiler could make flat 48 KiB feasible. |
+| **B** — compiler | Ready-to-send package for mikpe in `docs/toolchain-issues/for-mikpe/` (e-mail text, the ADR 0007 patch, three reproducers). The patch was checked with `git apply --check` against a clean `8b18811140ea`. **Not sent: Alan sends it.** |
+| **A** — code banking | Designed (ADR 0013): fixed ROM 32 KiB + a 16 KiB bank window at 0x8000 + 16 KiB RAM, i.e. the 48/16 split with the upper 16 KiB banked. Implementation needs the Step 06 runtime; see amendment A5 for the new order. |
+
+ADRs 0008–0010 stay "Proposed": Alan's reply chose the options but did not
+mention them.
