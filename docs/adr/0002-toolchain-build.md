@@ -1,6 +1,6 @@
 # 0002 — How the toolchain is built, and what mikpe's libc is used for
 
-Status: Proposed (agent)
+Status: Proposed (agent); **partially superseded by [0004](0004-libc-independence.md)** (libgcc is now built without target libc headers)
 Date: 2026-09-29
 Step: step-01-toolchain
 

@@ -25,5 +25,6 @@ step tag that depends on it was not objected to. The agent writes new ADRs as
 | # | Title | Status |
 |---|-------|--------|
 | [0001](0001-naming.md) | Architecture, chip and board naming | Proposed (agent) |
-| [0002](0002-toolchain-build.md) | Toolchain build method; mikpe libc for validation only | Proposed (agent) |
+| [0002](0002-toolchain-build.md) | Toolchain build method; mikpe libc for validation only | Proposed (agent); partially superseded by 0004 |
 | [0003](0003-simulator-strategy.md) | Simulator strategy (timer, time base, console input) | Accepted (Alan) |
+| [0004](0004-libc-independence.md) | NuttX uses only its own libc; libgcc built without target libc headers | Accepted |

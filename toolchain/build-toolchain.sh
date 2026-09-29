@@ -103,22 +103,16 @@ if stage binutils "$BINUTILS_SHA"; then
   done_stage binutils "$BINUTILS_SHA"
 fi
 
-# ---------------------------------------------------------------- libc headers
-# GCC's libgcc is built against the target C headers, so install them into
-# the sysroot before building GCC.
-fetch "$WORKDIR/cdp1802-elf-libc" "$LIBC_URL" "$LIBC_SHA"
-if stage libc-headers "$LIBC_SHA"; then
-  log "install libc headers into $SYSROOT"
-  make -C "$WORKDIR/cdp1802-elf-libc" PREFIX="$SYSROOT" install-common
-  done_stage libc-headers "$LIBC_SHA"
-fi
-
 # ---------------------------------------------------------------- GCC
 # --with-arch=1802 makes the default multilib the "1802" one, which is where
 #   the libc Makefile installs crt0.o/libc.a (sysroot/usr/lib/1802).
-# --disable-gcov: libgcov does not build against mikpe's minimal libc headers
-#   and NuttX does not need it (see docs/journal/step-01.md).
-GCC_CONFIG=(--with-arch=1802 --enable-languages=c --disable-nls
+# --disable-gcov: NuttX does not need libgcov (see docs/journal/step-01.md).
+# --without-headers --with-newlib: build libgcc with inhibit_libc, i.e.
+#   without ANY target libc headers, so that the libgcc linked into NuttX
+#   does not depend on mikpe's GPL libc (ADR 0004).  --with-newlib is GCC's
+#   standard "no target libc yet" switch; no newlib code is used.
+GCC_CONFIG=(--with-arch=1802 --without-headers --with-newlib
+  --enable-languages=c --disable-nls
   --disable-shared --disable-threads --disable-libssp --disable-libquadmath
   --disable-libgomp --disable-libatomic --disable-bootstrap --disable-werror
   --disable-gcov)
@@ -126,6 +120,9 @@ GCC_STAMP="$GCC_SHA $(echo "${GCC_CONFIG[*]}" | md5sum | cut -c1-8)"
 if stage gcc "$GCC_STAMP"; then
   fetch "$WORKDIR/gcc" "$GCC_URL" "$GCC_SHA"
   log "build GCC for $TARGET"
+  # fixincludes requires the sysroot include directory to exist; it stays
+  # empty of libc headers until the (validation-only) libc stage below.
+  mkdir -p "$SYSROOT/usr/include"
   rm -rf "$WORKDIR/build-gcc"
   mkdir -p "$WORKDIR/build-gcc"
   (
@@ -140,6 +137,7 @@ if stage gcc "$GCC_STAMP"; then
 fi
 
 # ---------------------------------------------------------------- libc
+fetch "$WORKDIR/cdp1802-elf-libc" "$LIBC_URL" "$LIBC_SHA"
 if stage libc "$LIBC_SHA"; then
   log "build cdp1802-elf-libc (validation only, never linked into NuttX)"
   (

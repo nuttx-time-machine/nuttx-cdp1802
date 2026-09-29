@@ -219,3 +219,26 @@ Consequences of `LSIE` for the CDP1802 port:
 
 **Recommendation:** use `LSIE` (as the other NuttX ports read their hardware
 state). The Step 07 ADR will record this, unless Alan decides otherwise.
+
+### Follow-up: GPL libc, newlib and NuttX's own libc (Alan, 2026-09-29)
+
+Alan asked whether newlib could replace mikpe's GPL libc, and noted that NuttX has its own libc.
+
+- NuttX does not link an external libc: GNU ports use `-nostdlib` and
+  `libs/libc/` (Apache-2.0). mikpe's libc was only ever meant for the
+  toolchain validation programs.
+- newlib: no CDP1802 port, neither upstream (`configure.host`, 0 matches out of 981
+  lines) nor in mikpe's newlib fork (only other targets' branches).
+- A real, hidden dependency was found and removed: libgcc had been built
+  against mikpe's headers (`_eprintf.o` → `__libc_stderr`). GCC is now built
+  with `--without-headers --with-newlib` (`inhibit_libc = true`).
+  - First attempt with `--without-headers` alone failed with
+    `The directory (BUILD_SYSTEM_HEADER_DIR) ... does not exist`. Creating an
+    empty `sysroot/usr/include` fixed that, but the next failure was
+    `tsystem.h:95:10: fatal error: stdio.h: No such file or directory`,
+    because GCC's configure only sets `inhibit_libc` with a sysroot when
+    `--with-newlib` is also given (`gcc/configure.ac:2578`).
+  - Result: libgcc's external symbols are `abort free malloc memcpy memset strlen`,
+    the member list is unchanged, and the validation images are byte-identical.
+  - The GCC rebuild took 3 min 24 s. `test-step-01.sh` and `test-step-02.sh` pass.
+- Decision recorded in [ADR 0004](../adr/0004-libc-independence.md).
