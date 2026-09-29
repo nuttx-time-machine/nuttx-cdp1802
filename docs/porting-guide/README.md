@@ -14,14 +14,14 @@ git tag of this repository where the concept first shows up in code, so you can
 
 | # | Chapter | First tag | Status |
 |---|---------|-----------|--------|
-| 1 | What a NuttX port consists of | step-00-bootstrap | not written |
+| 1 | [What a NuttX port consists of](01-what-a-port-is.md) | step-05-skeleton | written (Step 05) |
 | 2 | [Before you start: toolchain requirements and measuring feasibility](02-before-you-start.md) | step-04-size-gate | written (Step 04) |
 | 3 | Understanding your CPU and its ABI | step-01-toolchain | not written |
 | 4 | Choosing or defining a target and a memory map | step-03 | not written |
-| 5 | The arch directory | step-05 | not written |
-| 6 | Toolchain integration | step-05 | not written |
+| 5 | [The arch and board directories](05-arch-directory.md) | step-05-skeleton | written (Step 05) |
+| 6 | [Toolchain integration](06-toolchain-integration.md) | step-05-skeleton | written (Step 05) |
 | 7 | Linker scripts and startup code | step-06 | not written |
-| 8 | The interfaces in `include/nuttx/arch.h` | step-05 | not written |
+| 8 | [The interfaces in `include/nuttx/arch.h`](08-arch-interfaces.md) | step-05-skeleton | table generated (Step 05); status updated per step |
 | 9 | Interrupts | step-07 | not written |
 | 10 | The system timer and timekeeping | step-07 | not written |
 | 11 | Context switching and the interrupt frame | step-08 | not written |
