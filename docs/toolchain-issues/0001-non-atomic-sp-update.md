@@ -86,6 +86,11 @@ whose display controller fetches pixels by DMA, such as a CDP1861-based
 design. (This comes from general knowledge of the COSMAC VIP and has not yet
 been verified from the CDP1861 datasheet.)
 
+This covers the popular COSMAC machines: COMX-35 and Pecom 32/64 run
+refresh DMA and the Elf II uses CDP1861 video DMA (MAME drivers, see
+[`real-machines.md`](../cdp1802/real-machines.md)). So the compiler fix below
+is what makes NuttX interrupt-safe on those machines.
+
 For DMA boards, the port will keep the classic R2-based entry
 [MPM Fig. 76] behind a Kconfig choice (e.g. `CONFIG_COSMAC_ISR_SAVE_R2`).
 That entry is only safe with a toolchain whose SP updates are
