@@ -130,3 +130,92 @@ Problems:
 ## Time spent
 
 About 1.5 h wall-clock.
+
+## Gate outcome (Alan, 2026-09-29)
+
+| Question | Decision |
+|----------|----------|
+| 1. Simulator | **Fork sim1802** (ADR 0003 accepted). Local fork, amendment A4. |
+| 2. A1 workspace | Accepted: stays in `/home/alan/NUTTX_CDP1802`. |
+| 2. A2 upstream remotes | Accepted ("ok, no problem"). |
+| 2. A3 triplet | Provide `cdp1802-elf-*` → implemented as symlinks in `build-toolchain.sh`. |
+| 3. R0-based ISR | OK *if it works on a real machine without hardware modification*. Analysis added to toolchain issue 0001: yes on boards without DMA; boards that use DMA need the R2 entry plus an interrupt-safe toolchain. |
+| 4. LSIE vs shadow IE | Alan asked for an explanation of the impact and NuttX precedent. Answer below; decision still open. |
+
+### Q4: using `LSIE` instead of a software interrupt-enable flag
+
+NuttX asks the architecture for `irqstate_t up_irq_save(void)` (return the
+current enable state and disable) and `void up_irq_restore(irqstate_t)`.
+Critical sections (`enter_critical_section()` in non-SMP builds) are built on
+them.
+
+**Precedent: every existing NuttX port reads the hardware state.** No port
+keeps a software shadow (`grep` over `arch/*/include` and `arch/*/src` at
+the pinned commit):
+
+| Port | How the state is read | Where |
+|------|----------------------|-------|
+| AVR | `in %0, __SREG__; cli` | `arch/avr/include/avr/irq.h:183` |
+| Z80 | `ld a, i` (copies IFF2 into the P/V flag), `di` | `arch/z80/src/z80/z80_irq.c:46` |
+| eZ80 | same `ld a, i; di` trick | `arch/z80/src/ez80/ez80_irqsave.asm:50` |
+| Z8 | reads the IRQCTL register, `DI()` | `arch/z80/src/z8/z8_irq.c:83` |
+| ARMv7-M | PRIMASK/BASEPRI, also saved per context (`REG_BASEPRI`) | `arch/arm/src/armv7-m/arm_initialstate.c:164` |
+
+The Z80 is the closest precedent. Like the 1802, it has no instruction that
+simply loads the IE flip-flop. NuttX uses a side effect of another instruction
+(`ld a,i` sets P/V from IFF2), just as `LSIE` exposes IE through a skip.
+
+Consequences of `LSIE` for the CDP1802 port:
+
+1. **Same model as the other ports.** `irqstate_t` is a `uint8_t` (0/1),
+   returned in R7. No NuttX common code changes.
+2. **Race-free read-then-disable.** If an interrupt arrives between `LSIE`
+   and `DIS`, the ISR ends with `RET`, which sets IE=1 again, so the value
+   just read is still true. If that interrupt causes a context switch, the
+   thread's IE is restored to 1 when it resumes, and the pending `DIS`
+   executes then. The same argument holds for Z80 `ld a,i; di`.
+3. **The context switch gets IE for free.** A thread-level switch
+   (`up_switch_context()`) must save the outgoing thread's IE. With `LSIE`
+   that is one skip instruction. On restore, the port ends with `RET` (IE=1)
+   or `DIS` (IE=0), which also restore X and P from the saved byte. That is
+   the same exit path as an interrupt return, so one code path serves both.
+   A software shadow instead has to be kept equal to the hardware flip-flop
+   everywhere: the hardware clears IE on every interrupt entry without
+   telling the shadow, so every ISR entry/exit, every context switch and
+   every `DIS`/`RET` would also have to update a RAM variable, and each
+   thread would need its own copy.
+4. **Smaller and faster.** Sketch (NCRT ABI, flags in R7):
+   ```
+   up_irq_save:                      up_irq_restore:
+       ldi  0                            glo  7
+       phi  7                            lbz  1f
+       ldi  1       ; assume IE=1        sex  3
+       lsie         ; IE=1: skip 2 bytes ret           ; IE := 1
+       ldi  0       ; IE was 0           .byte 0x23    ; X=2, P=3
+       plo  7                            sep  5
+       sex  3                        1:  sex  3
+       dis          ; IE := 0            dis           ; IE := 0
+       .byte 0x23   ; X=2, P=3           .byte 0x23
+       sep  5                            sep  5
+   ```
+   `up_irq_save` is 13 bytes and `up_irq_restore` 12, with no RAM and no
+   pointer setup. This exact code runs in the simulator
+   (`toolchain/tests/sim-audit/irqsave.{S,c}`, checked by
+   `scripts/test-step-02.sh`: nested save/restore with IE both 1 and 0).
+   The first attempt used the short branch `bz` and failed to link
+   (`relocation truncated to fit: R_CDP1802_8`): 1802 short branches only
+   reach targets in the same 256-byte page [MPM p. 31], so arch code must use
+   long branches unless the placement is controlled. A shadow needs its
+   16-bit address loaded into a register first (4 instructions on this CPU,
+   because there is no absolute addressing), plus the load/store. Code size
+   is the main risk of this port (H6).
+5. **Constraint:** the inline byte `0x23` hard-codes X=2, P=3. That is valid
+   because all compiled code runs with P=3 and X=2 (abi.md §2), but these
+   routines must never be called from code running with another P, such as
+   the NCRT routines (which never call them).
+6. **Verified so far only in sim1802** (irqtest: IE 0 → DIS 0 → RET 1).
+   `LSIE` is documented for the plain CDP1802 [MPM p. 38, p. 99, p. 103], but
+   has not been tested on real silicon.
+
+**Recommendation:** use `LSIE` (as the other NuttX ports read their hardware
+state). The Step 07 ADR will record this, unless Alan decides otherwise.

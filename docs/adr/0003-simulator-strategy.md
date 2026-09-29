@@ -1,6 +1,6 @@
 # 0003 — Simulator strategy: periodic interrupt, time base and console input
 
-Status: **Proposed — awaiting Alan's decision (Step 02 GATE)**
+Status: **Accepted** (Alan, 2026-09-29: "ok to fork sim1802")
 Date: 2026-09-29
 Step: step-02-sim-audit
 
@@ -33,9 +33,10 @@ d. **sim1802 unchanged**: use the 10 Hz wall-clock tick, accept non-deterministi
 
 ## Decision
 
-Pending. **Recommendation: (a)**, as a git submodule `simulator/` (a fork of
-mikpe/sim1802, branch `cdp1802-nuttx`), so that the port and its tests are
-deterministic and NSH can be interactive.
+**(a)**: a git submodule `simulator/` (a fork of mikpe/sim1802, branch
+`cdp1802-nuttx`), so that the port and its tests are deterministic and NSH can
+be interactive. The fork stays local until Alan chooses a public location
+(amendment A4).
 
 ## Consequences (if (a) is accepted)
 

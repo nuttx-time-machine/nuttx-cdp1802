@@ -62,8 +62,36 @@ R0 as its own save pointer (`SEX 0`) into a static save area. It saves the
 interrupted R2 *as is* and restores it *as is*, so the torn value is resumed
 exactly and the interrupted code completes its two-step update normally.
 
-Caveat: on real hardware that uses DMA, R0 is not free. There the workaround
-needs revisiting (e.g. by the compiler change suggested below).
+### Does it work on real hardware without modification? (Alan's condition, 2026-09-29)
+
+**Yes, on any board that does not use DMA. No hardware change is needed.**
+
+- The workaround uses only CPU facilities present in every CDP1802: R1 as the
+  interrupt PC, `SEX 0`, `SAV`, `STXD`, `RET` [MPM pp. 40–41, 64–66].
+- Compiled code never touches R0. GCC lists R0 in `FIXED_REGISTERS`
+  (`cdp1802.h`: `1, 1, 1, 1, /* r0 r1 SP PC */`). All 63 apparent R0
+  "uses" in `objdump -d softfloat.elf` are false positives: 61 are the
+  `.hword` callee address after `sep 4`, and 2 are inline command bytes in
+  mikpe's libc `putchar` (`sex 3; out 7; .byte 0xe0`), which NuttX does not link.
+- R0 is the PC only after reset [MPM p. 54]. NuttX's start-up code switches
+  to R3 as PC (`SEP 3`) before enabling interrupts, as mikpe's `crt0.S` does
+  for the same reason.
+
+**Where it does not work:** boards that use DMA. The DMA-IN/DMA-OUT
+cycles use R0 as the memory pointer and increment it
+[MPM p. 9 "built-in memory pointer register"; p. 54 "Later, DMA pointer"],
+and DMA can occur between any two instructions, including inside the ISR. So
+R0 cannot also hold the ISR's save pointer. A typical example is a board
+whose display controller fetches pixels by DMA, such as a CDP1861-based
+design. (This comes from general knowledge of the COSMAC VIP and has not yet
+been verified from the CDP1861 datasheet.)
+
+For DMA boards, the port will keep the classic R2-based entry
+[MPM Fig. 76] behind a Kconfig choice (e.g. `CONFIG_COSMAC_ISR_SAVE_R2`).
+That entry is only safe with a toolchain whose SP updates are
+interrupt-safe (the compiler change suggested below). The choice and its
+precondition go into the Step 07 ADR. The sim1802 board has no DMA, so it
+uses the R0 entry.
 
 ## Draft report for mikpe (NOT SENT — for Alan to decide)
 

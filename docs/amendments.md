@@ -3,13 +3,13 @@
 `CONTRACT.md` is never edited. This file records changes to it. Each entry
 has a status: **Proposed** (waiting for Alan), **Accepted** or **Rejected**.
 
-## A1 — Workspace location (Proposed, 2026-09-29)
+## A1 — Workspace location (**Accepted** by Alan, 2026-09-29)
 
 - **Contract:** `~/nuttxspace/cdp1802/`.
 - **Actual:** `/home/alan/NUTTX_CDP1802/`, the directory where Alan placed `CONTRACT.md` and started the agent.
 - **Why:** `~/nuttxspace/` already holds many unrelated NuttX trees and patches. Alan asked for NuttX and apps to be freshly cloned from GitHub instead of reusing anything on the machine. A separate directory avoids any accidental mixing. Nothing in the repo depends on the absolute path; all scripts resolve paths relative to the repo root.
 
-## A2 — Submodule remotes point at upstream, not at forks (Proposed, 2026-09-29)
+## A2 — Submodule remotes point at upstream, not at forks (**Accepted** by Alan, 2026-09-29)
 
 - **Contract:** `nuttx/` and `apps/` are submodules of *forks*, on branch `cdp1802-port`.
 - **Actual:** `.gitmodules` points at `https://github.com/apache/nuttx.git` and `https://github.com/apache/nuttx-apps.git`. The `cdp1802-port` branches exist only in the local submodule clones.
@@ -17,8 +17,23 @@ has a status: **Proposed** (waiting for Alan), **Accepted** or **Rejected**.
 - **Consequence (important):** until the branches are pushed somewhere, a *fresh* clone of the meta repo cannot fetch the port commits, which breaks §5.7 reproducibility for other machines. On this machine everything reproduces.
 - **To resolve:** Alan creates the forks (e.g. `github.com/acassis/nuttx`) and pushes `cdp1802-port`. The agent then runs `git submodule set-url` in one commit.
 
-## A3 — Toolchain triplet spelling (Proposed, 2026-09-29)
+## A3 — Toolchain triplet spelling (**Accepted with change** by Alan, 2026-09-29)
 
 - **Contract:** mentions `cdp1802-elf` / `cdp1802-elf-size`.
 - **Actual:** tools are installed as `cdp1802-unknown-elf-*`. That is the canonical triplet `config.sub` produces for `cdp1802-elf`. mikpe's libc Makefile, the sim1802 install name (`cdp1802-unknown-elf-sim`) and its DejaGnu board all use it.
 - **Why:** it matches upstream conventions, so mikpe's libc and simulator work without patching.
+- **Alan's decision:** provide `cdp1802-elf-*` names. `build-toolchain.sh` now
+  creates a `cdp1802-elf-<tool>` symlink for every `cdp1802-unknown-elf-<tool>`.
+  The GCC driver resolves its install path through the symlink. A hello
+  built with `cdp1802-elf-gcc` has a byte-identical image to one built with
+  `cdp1802-unknown-elf-gcc`. NuttX's `Toolchain.defs` will use the
+  `cdp1802-elf-` prefix (Step 05). The canonical triplet stays
+  `cdp1802-unknown-elf`, because mikpe's libc and the simulator's DejaGnu
+  board expect it.
+
+## A4 — Simulator fork location (Accepted by Alan, 2026-09-29)
+
+- Alan approved forking sim1802 (ADR 0003). Following A2, the fork is a local
+  git repository used as the `simulator/` submodule, with branch
+  `cdp1802-nuttx` based on mikpe/sim1802 `3b28ed21695b`. It is not published
+  until Alan chooses a location.
