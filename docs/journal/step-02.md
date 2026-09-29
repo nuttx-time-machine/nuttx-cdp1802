@@ -242,3 +242,4 @@ Alan asked whether newlib could replace mikpe's GPL libc, and noted that NuttX h
     the member list is unchanged, and the validation images are byte-identical.
   - The GCC rebuild took 3 min 24 s. `test-step-01.sh` and `test-step-02.sh` pass.
 - Decision recorded in [ADR 0004](../adr/0004-libc-independence.md).
+- Docker image rebuilt with the new GCC configuration (`nuttx-cdp1802-toolchain:latest`). `scripts/test-step-01.sh` passes inside it, including the `cdp1802-elf-*` name check.
