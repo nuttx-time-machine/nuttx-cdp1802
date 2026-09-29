@@ -15,6 +15,8 @@ exists and how it was verified.
 | `fd79dc3` | Machine-cycle accounting; timer mode 4 (IRQ 0 every N cycles); 32-bit cycle-counter readback; IDL fast-forward; `--cycles`, `--max-cycles`, `--pace` | Deterministic tick (Step 07 exit criterion "in simulated time"), cycle measurements (H5, `performance.md`), bounded test runs |
 | `a63cf9e` | Console input: GETCHAR (0xE1), STATUS (0xE2), level-triggered IRQ 6, EOF signalled once | Serial driver RX and interactive NSH (Steps 09–10) |
 | `1e08519`, `55b6d99` | `.gitignore`, README | housekeeping, documentation |
+| `bef5700` | `__sim1802_rom_end` symbol sets the write-protect limit | ROM emulation for the board's memory profiles (ADR 0005). Upstream only used libc symbols (`__DTOR_END__`, `_fini`) that NuttX images do not have. |
+| `1be386b` | ELF segments loaded at `p_paddr` (load address), not `p_vaddr` | A ROM image keeps `.data`'s initial values in ROM and copies them to RAM. With `p_vaddr` the ROM copy was never loaded (found by the Step 03 smoke test). Ordinary images have `p_paddr == p_vaddr`. |
 
 Cycle counts come from RCA MPM-201A p. 8 (2 machine cycles per instruction,
 3 for long branch/skip and NOP) and the Intersil CDP1805AC/1806AC datasheet

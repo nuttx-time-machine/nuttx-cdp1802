@@ -16,7 +16,7 @@ It has two goals of equal weight (see [`CONTRACT.md`](CONTRACT.md)):
 | 00 | `step-00-bootstrap` | Meta repo, layout, pinned NuttX/apps | done |
 | 01 | `step-01-toolchain` | Toolchain built from pinned SHAs, hello + soft-float in the simulator, ABI documented | done |
 | 02 | `step-02-sim-audit` | Simulator capability audit (**GATE**) | report done — **waiting for decision** |
-| 03 | — | Virtual board definition | — |
+| 03 | `step-03-board` | Virtual board definition, sim1802 fork | done — **ADR 0005 awaiting acceptance** |
 | 04 | — | Size feasibility (**GATE**) | — |
 | 05 | — | Architecture skeleton links | — |
 | 06 | — | Boot banner from `nx_start()` | — |

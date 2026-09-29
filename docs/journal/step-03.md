@@ -1,4 +1,4 @@
-# Step 03 — Virtual board definition (in progress)
+# Step 03 — Virtual board definition
 
 **Goal:** define the `sim1802` virtual board (memory map, reset, ROM/RAM
 layout, console, timer, halt) on top of the simulator chosen at the Step 02
@@ -91,4 +91,76 @@ PASS: step 02
 
 ## Part 2 — board definition
 
-Not started yet.
+### What was done, in order
+
+1. Collected the facts the board depends on:
+   - reset state: I, N, X, P = 0, R(0) = 0, Q = 0, IE = 1, execution from
+     M(0000) [MPM p. 72, Fig. 86] — and the simulator's `init/2` matches;
+   - the loader writes a boot-argument block (magic, argc/argv/envp and the
+     filtered environment variables HOME, HOSTNAME, HOSTTYPE, MACHTYPE, OSTYPE,
+     PATH, USER) down from 0xFFF8, after loading the image;
+   - the loader rejects loadable bytes above 0xFF00 (`PAddr + FileSz =< 65536 - 256`);
+   - clock: MPM uses a 4-MHz example (p. 68); CDP1805AC maximum 5 MHz at 5 V
+     [DS1805 p. 4]. Chosen: nominal 4 MHz, configurable.
+2. Added `__sim1802_rom_end` to the fork (commit `bef5700`) so that a board
+   image, which has no `_fini`, can get ROM write protection. Verified with a
+   probe program: with the limit at 0x8000 but `.data` still in low memory,
+   mikpe's libc start-up **trapped** writing its own `.data` at 0x2D1B —
+   correct behaviour for an image not laid out for ROM; relinked with
+   `-Wl,-Tdata=0x8000` it runs, and a write into `main` traps (status 97).
+3. Wrote a **freestanding smoke program** (`toolchain/tests/board/smoke.S`, no
+   libc, no NCRT) and a HW32/32 linker-script prototype (`hw32.ld`): reset at
+   0, `.data` copy, `.bss` clear, console, cycle-timer IRQs via the R0 ISR,
+   IDL, halt.
+4. **First run printed `ticks=` followed by an unprintable byte.** `readelf -l`
+   showed the `.data` segment with VirtAddr 0x8000 and PhysAddr 0x151; the
+   loader loaded at `p_vaddr`, so the ROM copy at 0x151 was never written and
+   the start-up copy moved zeros (ticks = 0 + 5 = 0x05). Fixed in the fork:
+   load at `p_paddr` (commit `1be386b`). Then: `sim1802 board ok, ticks=5`.
+   hello/softfloat/abi still pass (their `p_paddr == p_vaddr`).
+5. Wrote the SIM64 prototype (`sim64.ld`) and ran the same program. Added
+   linker `ASSERT`s: HW32/32 ROM overflow, and the 0xFF00 loader limit.
+6. Wrote `docs/cdp1802/board-sim1802.md` (memory-map diagram, devices,
+   constraints), ADR 0005 and `scripts/test-step-03.sh`.
+7. The first version of the SIM64 oversize check passed for the wrong reason
+   (the test image overflowed the whole region, so the generic "will not fit"
+   error fired). Changed it to an image ending between 0xFF00 and 0xFFFF and
+   required the specific assert message.
+
+### Test
+
+```
+$ scripts/test-step-03.sh
+PASS: sim1802 fork
+ok: hw32 smoke (@ cycles 26109)
+ok: hw32 ROM write -> 97
+ok: sim64 smoke (@ cycles 26109)
+ok: sim64 ROM write -> 97
+ok: linker scripts reject oversized images
+PASS: step 03
+```
+
+### Measurements
+
+- Smoke program: 26 109 machine cycles for start-up, 5 ticks of 5 000
+  cycles, and 26 bytes of console output — identical on every run and in
+  both profiles.
+- Image: `.text`+`.rodata` 0x151 = 337 bytes, `.data` 5, `.bss` 4.
+
+### Hypotheses
+
+- **H2** (interrupt entry, R1 = ISR PC): used as designed by the smoke test's
+  R0-based ISR; see toolchain issue 0001 for the R2 part.
+- **H6**: nothing new (no NuttX code yet); the profiles that the judgement
+  will use are now defined and executable.
+
+### Open questions for Alan
+
+- **ADR 0005 needs your acceptance** (the contract's Step 03 exit criterion
+  is "the ADR is accepted"). The step will be tagged `step-03-board` after that.
+- `docs/cdp1802/primer.md` (CONTRACT §7.4) is not written yet; planned
+  alongside Step 05 (porting-guide chapters 3–5).
+
+### Time spent
+
+About 2 h wall-clock for both parts.
