@@ -34,12 +34,11 @@ The reasons are per machine:
    has 256 bytes of RAM and no ROM, which is far too small for NuttX without
    a memory expansion.
 2. **DMA on R0.** All three machines use DMA for video and/or memory refresh
-   once it is enabled, and DMA uses R0 as its pointer. The interrupt entry
-   planned for sim1802 uses R0 as its save pointer (toolchain issue 0001),
-   which is **not usable while DMA is active**. On these machines NuttX needs
-   the R2-based interrupt entry, and that is only safe with a compiler whose
-   stack-pointer updates are interrupt-safe (the fix proposed in the draft
-   report to mikpe).
+   once it is enabled, and DMA uses R0 as its pointer. Since ADR 0006, NuttX
+   follows the standard convention (R0 free for DMA, R2-stack interrupt
+   entry) on every board, sim1802 included, so this is no longer a blocker.
+   It does make toolchain issue 0001 (interrupt-safe stack-pointer updates)
+   a prerequisite for interrupts on every board.
 3. **Devices.** Console, tick and halt on sim1802 are the simulator's I/O
    controller on ports 6/7. The real machines have a keyboard, video (CDP1861
    or CDP1869/1870), cassette and machine-specific expansion I/O instead; the
@@ -53,8 +52,7 @@ itself. COMX-35 in particular boots from ROM at 0x0000 exactly like the
 sim1802 board, only with a smaller ROM. Each real machine needs its own
 board directory (e.g. `boards/cosmac/cdp1802/comx35/`) with its own linker
 script, start-up memory setup (for the Pecom: run the first instructions from
-the shadow, jump to the ROM's real address, then `OUT 1`), drivers and
-interrupt-entry variant.
+the shadow, jump to the ROM's real address, then `OUT 1`) and drivers.
 
 ## What would make a real-machine claim testable
 

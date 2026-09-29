@@ -21,7 +21,7 @@ page numbers); [DS1805] Intersil *CDP1805AC, CDP1806AC* datasheet, March 1997
 | Cycle counting | performance numbers (H5), deterministic time | **none** (S: no cycle accounting in `sim1802_core.erl`) | ❌ |
 | Console output | lowputc, syslog, serial driver | `OUT 6` byte, `OUT 7` 0xE0 → host stdout (S: `console_putchar/0`) | ✅ |
 | Console input | NSH (Step 10) | command 0xE1 is defined in `sim1802_io.hrl` but **not implemented**: prints `@ Invalid I/O command 0xE1` (E) | ❌ |
-| DMA (R0) | not needed | **not modelled** (no DMA code in S). R0 is only the reset PC | ✅ (R0 is free for software) |
+| DMA (R0) | not needed | **not modelled** (no DMA code in S). R0 is only the reset PC | ✅ (NuttX still leaves R0 to DMA by convention, ADR 0006) |
 | IDLE | idle loop | `IDL` blocks until an interrupt is pending; with IE=0 it traps `deadlock` (S: `emu_IDL/1`) | ✅ |
 | Memory | whole system | 64 KiB flat RAM (S: `atomics:new(65536)`) | ✅ SIM64 |
 | ROM emulation | HW32/32 profile | write-protects `[0, _fini)` or `[0, __DTOR_END__)` if the symbol exists; this toolchain defines neither, so nothing is protected (E: probe `wp`) | ⚠ a NuttX linker script can define `_fini` at the end of ROM |

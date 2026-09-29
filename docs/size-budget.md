@@ -15,4 +15,4 @@ Memory profiles (defined in Step 03: `docs/cdp1802/board-sim1802.md`, ADR 0005):
 | 00 | — | — | — | — | — | — | — | — | — | — | No NuttX image yet |
 | 01 | — | — | — | — | — | — | — | — | — | — | No NuttX image yet. Toolchain reference points (mikpe libc, not NuttX): hello 995 B text; printf+double soft-float 47 517 B text (`__adddf3` 15 198, `__muldf3` 12 012). See journal step-01. |
 | 02 | — | — | — | — | — | — | — | — | — | — | No NuttX image yet (simulator audit only) |
-| 03 | board smoke test (`smoke.S`, no NuttX) | 337 | (in .text) | 5 | 4 | 342 | 9 | — | ✅ | ✅ | No NuttX image yet; numbers are the freestanding board smoke test |
+| 03 | board smoke test (`smoke.S`, no NuttX) | 346 | (in .text) | 1 | 4 | 347 | 5 | — | ✅ | ✅ | No NuttX image yet; freestanding board smoke test (ROM image 347 B incl. `.data` copy) |

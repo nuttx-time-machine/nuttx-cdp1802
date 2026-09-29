@@ -149,8 +149,9 @@ PASS: step 03
 
 ### Hypotheses
 
-- **H2** (interrupt entry, R1 = ISR PC): used as designed by the smoke test's
-  R0-based ISR; see toolchain issue 0001 for the R2 part.
+- **H2** (interrupt entry, R1 = ISR PC, R2 a valid stack): used as designed
+  by the smoke test's standard R2-stack ISR (Part 4). For compiled code the
+  R2 part depends on toolchain issue 0001.
 - **H6**: nothing new (no NuttX code yet); the profiles that the judgement
   will use are now defined and executable.
 
@@ -207,11 +208,38 @@ ok: linker scripts reject oversized images
 PASS: step 03
 ```
 
+### Part 4 — acceptance and the COSMAC register convention
+
+Alan (2026-09-29): "I'm Ok with ROM at 0 and 32k/32k division, however you
+need to keep compatibility with existing convention": R1 = interrupt PC
+(hardware), R2 = stack pointer valid for any interrupt routine, R3 = PC set up
+by the start-up code with `SEP 3`, freeing R0 for DMA.
+
+1. Checked the three real machines Alan named in MAME's drivers
+   (`real-machines.md`): all use DMA through R0, which rules out the R0-based
+   interrupt entry. That matches the convention.
+2. Recorded the convention as ADR 0006 (accepted) and withdrew the R0 entry.
+   Toolchain issue 0001 is now a prerequisite of Step 07. I looked at where
+   GCC writes R2 (`cdp1802.cc`/`.md`): large constant adjustments
+   (`addhi3`, low byte first) and SP ← frame pointer in epilogues (high byte
+   first). The issue lists safe orderings and three ways to get them.
+3. Rewrote the smoke test's ISR in the standard R2-stack form [MPM Fig. 76]:
+   `DEC 2; SAV; DEC 2; STR 2; …`, exit `LDA 2 … RET`. It saves T, D, DF and
+   R15, and never touches R0. Result: `ticks=5`, 347-byte ROM, 26 047 cycles.
+4. The undefined-RAM check then **failed** for a harmless reason: with
+   `--ram-seed 7`, the power-on byte at 0x8000 happens to be `'0'`, so the
+   uncopied counter still ended at `'5'` (1 chance in 256). The check is now
+   over 8 seeds: the correct program must pass for all of them, and the
+   no-copy build must give ≥ 4 distinct outputs with ≤ 2 correct. Result: 1/8
+   correct, 8 distinct.
+5. ADR 0005 marked accepted.
+
 ### Open questions for Alan
 
-- **ADR 0005 (revised for ROM boot) needs your acceptance** (the contract's
-  Step 03 exit criterion is "the ADR is accepted"). The step will be tagged
-  `step-03-board` after that.
+- ~~ADR 0005 needs your acceptance~~: accepted (Part 4).
+- **Toolchain issue 0001, choose a fix before Step 07:** patch GCC (needs
+  your approval, CONTRACT §5.9), rewrite the assembly at build time, or wait
+  for mikpe. The draft report is ready to send.
 - `docs/cdp1802/primer.md` (CONTRACT §7.4) is not written yet; planned
   alongside Step 05 (porting-guide chapters 3–5).
 

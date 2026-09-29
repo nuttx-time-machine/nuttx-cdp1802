@@ -61,7 +61,7 @@ The board's first instructions (Step 06; shown working in
 
 ```
 0x0000  DIS ; .byte 0x00     IE := 0, X := 0, P := 0 (inline byte via R(X)=R0)
-        load R3 := __start_c ; SEP 3     PC := R3 — R0 is now free (no DMA)
+        load R3 := __start_c ; SEP 3     PC := R3 — R0 is never used again (DMA, ADR 0006)
         R2 := initial SP, SEX 2, copy .data, clear .bss, set R4/R5 (NCRT) ...
 ```
 
@@ -121,8 +121,9 @@ Rules and constraints, each checked by `scripts/test-step-03.sh`:
 
 All devices are behind the simulator's I/O controller on **two ports**:
 `OUT 6`/`INP 6` = 8-bit argument/result buffer, `OUT 7` = command. The CPU's
-other I/O lines (N = 1–5), EF1–EF4 and Q are not connected. There is **no DMA**,
-so R0 is free after reset (used by the interrupt entry, toolchain issue 0001).
+other I/O lines (N = 1–5), EF1–EF4 and Q are not connected. There is no DMA
+in the simulator, but NuttX still never uses R0 after reset, so that the same
+code runs on boards that do use DMA (register convention, ADR 0006).
 
 | Device | Commands (`OUT 7`) | IRQ | NuttX user |
 |--------|--------------------|-----|-----------|
@@ -148,14 +149,14 @@ Only `boards/cosmac/cdp1802/sim1802/` should know about the simulator's I/O
 controller. A real board would supply a UART (e.g. a CDP1854 on the N lines),
 a tick source (e.g. the CDP1805/1806 on-chip timer [DS1805 pp. 12–13] or an
 external one on the INT line), its own memory decoding, and possibly DMA
-(which conflicts with the R0-based interrupt entry, see toolchain issue 0001).
+(compatible: NuttX leaves R0 to DMA, ADR 0006).
 
 ## 6. Verification
 
 `scripts/test-step-03.sh` links `toolchain/tests/board/smoke.S` with both
 linker-script prototypes, converts each to its raw ROM binary and boots it
 with `--rom`: reset at 0x0000, `.data` copy from ROM, `.bss` clear, console
-output, 5 cycle-timer interrupts through the R0-based ISR while in `IDL`,
+output, 5 cycle-timer interrupts through the standard R2-stack ISR while in `IDL`,
 halt with status 0. It also checks that the binary starts with the reset
 code, that the ELF-loader run gives the same output, that a build *without*
 the `.data` copy fails (undefined RAM), and that ROM writes are ignored or

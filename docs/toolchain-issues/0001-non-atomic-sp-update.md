@@ -53,50 +53,57 @@ Occurrences in linked Step 01 test programs (counted with `objdump -d | grep`):
 `abi.elf` 22 × `plo 2` / 22 × `phi 2`; `softfloat.elf` 39 / 50. Most are in
 libgcc soft-fp and in mikpe's libc.
 
-## Workaround in the port (planned, Step 07, ADR to be written)
+## Consequence for the port (revised 2026-09-29, ADR 0006)
 
-The interrupt entry does not store anything through R2 until it has switched
-to a known-good stack. R0 is reserved by the ABI ("fixed, DMA") and the
-compiler never allocates it. The sim1802 board has no DMA, so the ISR can use
-R0 as its own save pointer (`SEX 0`) into a static save area. It saves the
-interrupted R2 *as is* and restores it *as is*, so the torn value is resumed
-exactly and the interrupted code completes its two-step update normally.
+~~Workaround: an interrupt entry that saves through R0 instead of R2.~~
+**Withdrawn.** Alan requires the established COSMAC convention: R0 stays
+free for DMA, R1 is the interrupt PC, and R2 must be a valid stack for the
+interrupt routine at all times (ADR 0006). Real machines (COMX-35, Pecom,
+Elf II) do use DMA through R0 (`real-machines.md`). So the problem must be
+solved where it arises: **no instruction boundary may leave R2 above the live
+stack top.**
 
-### Does it work on real hardware without modification? (Alan's condition, 2026-09-29)
+GCC writes R2 in these places (`gcc/config/cdp1802/cdp1802.cc`, `.md` at
+`8b18811140ea`):
 
-**Yes, on any board that does not use DMA. No hardware change is needed.**
+| Source | Emitted | Safe? |
+|--------|---------|-------|
+| `addhi3` / `subhi3` on SP with 1–7 | `dec 2` / `inc 2` repeated (`cdp1802_template_incdec`) | yes: each step is atomic and monotonic |
+| `addhi3` on SP with a larger constant (prologue/epilogue, `cdp1802_emit_addhi3_postreload`) | `glo 2; adi lo; plo 2; ghi 2; adci hi; phi 2` | **no** for allocation: the intermediate value is up to 256 bytes *above* the old SP |
+| `movhi` SP ← frame pointer (epilogue when `frame_pointer_needed`) | `ghi fp; phi 2; glo fp; plo 2` | **no**: the intermediate `(new_hi, old_lo)` can be above the new SP |
+| alloca / variable-length arrays | SP arithmetic with a register | not yet examined; NuttX can avoid them |
 
-- The workaround uses only CPU facilities present in every CDP1802: R1 as the
-  interrupt PC, `SEX 0`, `SAV`, `STXD`, `RET` [MPM pp. 40–41, 64–66].
-- Compiled code never touches R0. GCC lists R0 in `FIXED_REGISTERS`
-  (`cdp1802.h`: `1, 1, 1, 1, /* r0 r1 SP PC */`). All 63 apparent R0
-  "uses" in `objdump -d softfloat.elf` are false positives: 61 are the
-  `.hword` callee address after `sep 4`, and 2 are inline command bytes in
-  mikpe's libc `putchar` (`sex 3; out 7; .byte 0xe0`), which NuttX does not link.
-- R0 is the PC only after reset [MPM p. 54]. NuttX's start-up code switches
-  to R3 as PC (`SEP 3`) before enabling interrupts, as mikpe's `crt0.S` does
-  for the same reason.
+A safe ordering exists with no extra register:
 
-**Where it does not work:** boards that use DMA. The DMA-IN/DMA-OUT
-cycles use R0 as the memory pointer and increment it
-[MPM p. 9 "built-in memory pointer register"; p. 54 "Later, DMA pointer"],
-and DMA can occur between any two instructions, including inside the ISR. So
-R0 cannot also hold the ISR's save pointer. A typical example is a board
-whose display controller fetches pixels by DMA, such as a CDP1861-based
-design. (This comes from general knowledge of the COSMAC VIP and has not yet
-been verified from the CDP1861 datasheet.)
+- adding a constant `V = hi·256 + lo` to SP: `ghi 2; adi hi; phi 2`, then
+  `glo 2; adi lo; plo 2; ghi 2; adci 0; phi 2`. Every intermediate value is
+  ≤ the final one, i.e. at or below the new stack top;
+- moving a register into SP: write the byte that makes the intermediate value
+  the *smaller* of old/new first, which needs a comparison. Alternatively
+  first set SP to a value known to be below both (e.g. `ghi fp; smi 1;
+  phi 2` gives `(fp_hi−1, old_lo)` < fp; then `glo fp; plo 2; ghi fp; phi 2`)
+  at the cost of three instructions.
 
-This covers the popular COSMAC machines: COMX-35 and Pecom 32/64 run
-refresh DMA and the Elf II uses CDP1861 video DMA (MAME drivers, see
-[`real-machines.md`](../cdp1802/real-machines.md)). So the compiler fix below
-is what makes NuttX interrupt-safe on those machines.
+Options (decision needed before Step 07; Steps 04–06 do not enable interrupts):
 
-For DMA boards, the port will keep the classic R2-based entry
-[MPM Fig. 76] behind a Kconfig choice (e.g. `CONFIG_COSMAC_ISR_SAVE_R2`).
-That entry is only safe with a toolchain whose SP updates are
-interrupt-safe (the compiler change suggested below). The choice and its
-precondition go into the Step 07 ADR. The sim1802 board has no DMA, so it
-uses the R0 entry.
+1. **Patch GCC** (the two templates above), plus a verifier that scans every
+   linked NuttX image for R2 writes and rejects unknown patterns. Needs an ADR
+   and Alan's approval (CONTRACT §5.9). Offer the patch to mikpe.
+2. **Rewrite the generated assembly** at build time (compile to `.s`, a filter
+   script replaces the unsafe sequences with the safe ones, then assemble),
+   plus the same verifier. GCC stays untouched, but the workaround lives in
+   the build (NuttX `Toolchain.defs`) and libgcc must be rebuilt through it
+   or shown to be free of unsafe sequences.
+3. **Send the report and wait for mikpe.**
+
+The verifier is useful in every case, and it also documents the property in
+CI.
+
+Caveat for both safe orderings: they rely on unsigned 16-bit order, so they
+assume no stack lives in the lowest 256-byte page (0x0000–0x00FF), where
+"one page lower" would wrap to the top of memory. Both sim1802 profiles keep
+stacks at the top of RAM (≥ 0x8000 in HW32/32); the linker script can assert
+it.
 
 ## Draft report for mikpe (NOT SENT — for Alan to decide)
 

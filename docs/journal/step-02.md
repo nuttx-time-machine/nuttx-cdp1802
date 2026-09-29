@@ -139,7 +139,7 @@ About 1.5 h wall-clock.
 | 2. A1 workspace | Accepted: stays in `/home/alan/NUTTX_CDP1802`. |
 | 2. A2 upstream remotes | Accepted ("ok, no problem"). |
 | 2. A3 triplet | Provide `cdp1802-elf-*` → implemented as symlinks in `build-toolchain.sh`. |
-| 3. R0-based ISR | OK *if it works on a real machine without hardware modification*. Analysis added to toolchain issue 0001: yes on boards without DMA; boards that use DMA need the R2 entry plus an interrupt-safe toolchain. |
+| 3. R0-based ISR | **Superseded by ADR 0006** (register convention, R0 free for DMA). Originally: OK *if it works on a real machine without hardware modification*. Analysis added to toolchain issue 0001: yes on boards without DMA; boards that use DMA need the R2 entry plus an interrupt-safe toolchain. |
 | 4. LSIE vs shadow IE | Alan asked for an explanation of the impact and NuttX precedent. Answer below; decision still open. |
 
 ### Q4: using `LSIE` instead of a software interrupt-enable flag
