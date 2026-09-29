@@ -20,7 +20,7 @@ git tag of this repository where the concept first shows up in code, so you can
 | 4 | Choosing or defining a target and a memory map | step-03 | not written |
 | 5 | [The arch and board directories](05-arch-directory.md) | step-05-skeleton | written (Step 05) |
 | 6 | [Toolchain integration](06-toolchain-integration.md) | step-05-skeleton | written (Step 05) |
-| 7 | Linker scripts and startup code | step-06 | not written |
+| 7 | [Linker scripts and start-up code](07-startup.md) | step-06-boot | written (Step 06) |
 | 8 | [The interfaces in `include/nuttx/arch.h`](08-arch-interfaces.md) | step-05-skeleton | table generated (Step 05); status updated per step |
 | 9 | Interrupts | step-07 | not written |
 | 10 | The system timer and timekeeping | step-07 | not written |

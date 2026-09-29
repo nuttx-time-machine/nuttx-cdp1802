@@ -37,3 +37,4 @@ step tag that depends on it was not objected to. The agent writes new ADRs as
 | [0011](0011-system-time32.md) | Common code: opt-in 32-bit system time (CONFIG_SYSTEM_TIME32) | Accepted (Alan, option C) |
 | [0012](0012-profile-hw48.md) | Memory profile HW48/16 | Accepted (Alan) |
 | [0013](0013-code-banking.md) | Code banking: fixed ROM + 16 KiB window, stubs, bank return stack | Approach accepted (option A); design proposed |
+| [0014](0014-startup-ncrt-memory.md) | Start-up: NCRT routines in the arch, idle stack after .bss, heap to the top of RAM | Proposed (agent) |

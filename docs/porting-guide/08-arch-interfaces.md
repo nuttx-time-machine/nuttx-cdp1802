@@ -17,7 +17,8 @@ the preprocessor condition around the prototype.
 
 > **CDP1802 example:** `sim1802:minimal` needed **16** interfaces to link. They
 > are marked "yes (link)" below, plus `board_late_initialize()` from
-> `board.h`. At step-05 they are `PANIC()`/empty stubs in `cosmac_stubs.c`.
+> `board.h`. At step-05 they are `PANIC()`/empty stubs in `cosmac_stubs.c`; the last
+> column shows which step replaced each stub.
 > The column is updated as Steps 06–09 implement them. The interrupt-state
 > functions are real at step-05 (`cosmac_irqsave.S`).
 
@@ -64,7 +65,7 @@ the preprocessor condition around the prototype.
 | `up_alarm_tick_cancel` |  | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_SCHED_TICKLESS) && ` |  |  |
 | `up_alarm_tick_start` |  | `!defined(__INCLUDE_NUTTX_ARCH_H) && (defined(CONFIG_HRTIMER) && define` |  |  |
 | `up_alloc_irq_msi` | Allocate interrupts for MSI/MSI-X vector. | `!defined(__INCLUDE_NUTTX_ARCH_H)` |  |  |
-| `up_allocate_heap` | This function will be called to dynamically set aside the heap region. | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | stub (`cosmac_stubs.c`) |
+| `up_allocate_heap` | This function will be called to dynamically set aside the heap region. | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | step-06 (`cosmac_allocateheap.c`) |
 | `up_allocate_kheap` | For the kernel builds (CONFIG_BUILD_PROTECTED=y or CONFIG_BUILD_KERNEL=y) there may be both kernel- and user-space heaps as determined by CO | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_MM_KERNEL_HEAP)` |  |  |
 | `up_allocate_pgheap` | If there is a page allocator in the configuration, then this function must be provided by the platform-specific code. | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_MM_PGALLOC)` |  |  |
 | `up_assert` |  | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_ARCH_HAVE_SYSCALL)` |  |  |
@@ -83,7 +84,7 @@ the preprocessor condition around the prototype.
 | `up_debugpoint_add` | Add a debugpoint. | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_ARCH_HAVE_DEBUG)` |  |  |
 | `up_debugpoint_remove` | Remove a debugpoint. | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_ARCH_HAVE_DEBUG)` |  |  |
 | `up_disable_irq` | This function implements disabling of the device specified by 'irq' at the interrupt controller level if supported by the architecture (up_i | `!defined(__INCLUDE_NUTTX_ARCH_H) && !defined(CONFIG_ARCH_NOINTC)` |  |  |
-| `up_dump_register` | Register dump may be handled in an architecture-specific way. | `!defined(__INCLUDE_NUTTX_ARCH_H)` |  |  |
+| `up_dump_register` | Register dump may be handled in an architecture-specific way. | `!defined(__INCLUDE_NUTTX_ARCH_H)` | yes (assert) | step-06 (`cosmac_registerdump.c`) |
 | `up_enable_irq` | On many architectures, there are three levels of interrupt enabling: (1) at the global level, (2) at the level of the interrupt controller,  | `!defined(__INCLUDE_NUTTX_ARCH_H) && !defined(CONFIG_ARCH_NOINTC)` |  |  |
 | `up_exit` | This function causes the currently executing task to cease to exist. | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | stub (`cosmac_stubs.c`) |
 | `up_extraheaps_init` | Initialize any extra heap. | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_ARCH_HAVE_EXTRA_HEA` |  |  |
@@ -93,11 +94,11 @@ the preprocessor condition around the prototype.
 | `up_get_legacy_irq` | Reserve vector for legacy | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_PCI)` |  |  |
 | `up_getsp` |  | `(macro or not a prototype)` |  |  |
 | `up_getusrsp` |  | `(macro or not a prototype)` |  |  |
-| `up_idle` | up_idle() is the logic that will be executed when there is no other ready-to-run task. | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | stub (`cosmac_stubs.c`) |
-| `up_initial_state` | A new thread is being started and a new TCB has been created. | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | stub (`cosmac_stubs.c`) |
-| `up_initialize` | up_initialize will be called once during OS initialization after the basic OS services have been initialized. | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | stub (`cosmac_stubs.c`) |
+| `up_idle` | up_idle() is the logic that will be executed when there is no other ready-to-run task. | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | step-06 (`cosmac_idle.c`, empty loop body) |
+| `up_initial_state` | A new thread is being started and a new TCB has been created. | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | step-06, idle thread only (`cosmac_initialstate.c`) |
+| `up_initialize` | up_initialize will be called once during OS initialization after the basic OS services have been initialized. | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | step-06 (`cosmac_initialize.c`, empty) |
 | `up_irq_to_ndx` | Irq to ndx | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_ARCH_IRQ_TO_NDX)` |  |  |
-| `up_irqinitialize` |  | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | stub (`cosmac_stubs.c`) |
+| `up_irqinitialize` |  | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | step-06 (`cosmac_irq.c`) |
 | `up_lowputc` | Output one character in early boot-stages. | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_ARCH_LOWPUTC)` |  |  |
 | `up_mdelay` | Some device drivers may require that the platform-specific logic provides these timing loops for short delays. | `!defined(__INCLUDE_NUTTX_ARCH_H)` |  |  |
 | `up_memtag_bypass` | Set MTE state bypass or not | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_ARCH_HAVE_MEMTAG)` |  |  |
@@ -106,7 +107,7 @@ the preprocessor condition around the prototype.
 | `up_memtag_set_tag` | Get the address with label | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_ARCH_HAVE_MEMTAG)` |  |  |
 | `up_memtag_tag_mem` | Set memory tags for a given memory range | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_ARCH_HAVE_MEMTAG)` |  |  |
 | `up_ndelay` |  | `!defined(__INCLUDE_NUTTX_ARCH_H)` |  |  |
-| `up_nputs` |  | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | stub (`cosmac_stubs.c`) |
+| `up_nputs` |  | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | step-06 (`cosmac_nputs.c`) |
 | `up_perf_` | The first interface simply provides the current time value in unknown units. | `(macro or not a prototype)` |  |  |
 | `up_perf_convert` |  | `!defined(__INCLUDE_NUTTX_ARCH_H)` |  |  |
 | `up_perf_getfreq` |  | `!defined(__INCLUDE_NUTTX_ARCH_H)` |  |  |
@@ -114,7 +115,7 @@ the preprocessor condition around the prototype.
 | `up_perf_init` |  | `!defined(__INCLUDE_NUTTX_ARCH_H)` |  |  |
 | `up_prioritize_irq` | Set the priority of an IRQ. | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_ARCH_IRQPRIO)` |  |  |
 | `up_pthread_start` | In this kernel mode build, this function will be called to execute a pthread in user-space. | `!defined(__INCLUDE_NUTTX_ARCH_H) && !defined(CONFIG_BUILD_FLAT) && def` |  |  |
-| `up_putc` | Output one character on the console | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | stub (`cosmac_stubs.c`) |
+| `up_putc` | Output one character on the console | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | step-06 (board `sim1802_lowputc.c`) |
 | `up_puts` | Output a string on the console | `(macro or not a prototype)` |  |  |
 | `up_regs_memcpy` |  | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_ARCH_HAVE_REGCPY)` |  |  |
 | `up_release_irq_msi` | Allocate interrupts for MSI/MSI-X vector. | `!defined(__INCLUDE_NUTTX_ARCH_H)` |  |  |
@@ -127,7 +128,7 @@ the preprocessor condition around the prototype.
 | `up_rtc_initialize` | Initialize the builtin, MCU hardware RTC per the selected configuration. | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_RTC)` |  |  |
 | `up_rtc_settime` | Set the RTC to the provided time. | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_RTC)` |  |  |
 | `up_rtc_time` | Get the current time in seconds. | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_RTC) && !defined(CO` |  |  |
-| `up_saveusercontext` | Save the current thread context | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | stub (`cosmac_stubs.c`) |
+| `up_saveusercontext` | Save the current thread context | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | step-06: zeroed context (never PANIC, used by `_assert`) |
 | `up_schedule_sigaction` | This function is called by the OS when one or more signal handling actions have been queued for execution. | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_ENABLE_ALL_SIGNALS)` |  |  |
 | `up_secure_irq` | Secure an IRQ | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_ARCH_TRUSTZONE_SECU` |  |  |
 | `up_secure_irq_all` | Secure all IRQ | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_ARCH_TRUSTZONE_SECU` |  |  |
@@ -140,7 +141,7 @@ the preprocessor condition around the prototype.
 | `up_show_cpuinfo` | This function will be called when reading /proc/cpufinfo. | `!defined(__INCLUDE_NUTTX_ARCH_H)` |  |  |
 | `up_signal_dispatch` | In this kernel mode build, this function will be called to execute a a signal handler in user-space. | `!defined(__INCLUDE_NUTTX_ARCH_H) && !defined(CONFIG_BUILD_FLAT) && def` |  |  |
 | `up_signal_handler` | This function is the user-space, signal handler trampoline function that must be provided by architecture-specific logic. | `!defined(__INCLUDE_NUTTX_ARCH_H) && defined(CONFIG_BUILD_PROTECTED) &&` |  |  |
-| `up_stack_frame` | Allocate a stack frame in the TCB's stack to hold thread-specific data. | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | stub (`cosmac_stubs.c`) |
+| `up_stack_frame` | Allocate a stack frame in the TCB's stack to hold thread-specific data. | `!defined(__INCLUDE_NUTTX_ARCH_H)` | **yes (link)** | step-06 (`cosmac_stackframe.c`) |
 | `up_switch_context` | A task is currently in the ready-to-run list but has been prepped to execute. | `!defined(__INCLUDE_NUTTX_ARCH_H) && !defined(up_switch_context)` | **yes (link)** | stub (`cosmac_stubs.c`) |
 | `up_systempoweroff` | The function up_systempoweroff() will power down the MCU. | `!defined(__INCLUDE_NUTTX_ARCH_H)` |  |  |
 | `up_systemreset` | The function up_systemreset() will reset the MCU. | `!defined(__INCLUDE_NUTTX_ARCH_H)` |  |  |

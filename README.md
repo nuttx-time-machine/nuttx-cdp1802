@@ -15,11 +15,12 @@ It has two goals of equal weight (see [`CONTRACT.md`](CONTRACT.md)):
 |------|-----|------------------|-------|
 | 00 | `step-00-bootstrap` | Meta repo, layout, pinned NuttX/apps | done |
 | 01 | `step-01-toolchain` | Toolchain built from pinned SHAs, hello + soft-float in the simulator, ABI documented | done |
-| 02 | `step-02-sim-audit` | Simulator capability audit (**GATE**) | report done — **waiting for decision** |
+| 02 | `step-02-sim-audit` | Simulator capability audit (**GATE**) | done — Alan decided (fork sim1802, LSIE + SW-flag option; journal step-02) |
 | 03 | `step-03-board` | Virtual board (ROM boot like real HW), sim1802 fork, register convention | done |
-| 04 | `step-04-size-gate` | Size feasibility (**GATE**) | report done: **does not fit HW32/32 (2.3×) — waiting for decision** |
+| 04 | `step-04-size-gate` | Size feasibility (**GATE**) | done — does not fit HW32/32 flat; Alan chose banking, mikpe report, 32-bit time, HW48/16 (amendment A5) |
 | 05 | `step-05-skeleton` | Architecture skeleton links (SIM64) | done |
-| 06 | — | Boot banner from `nx_start()` | — |
+| 06 | `step-06-boot` | Boot from the raw ROM image to the idle loop (SIM64) | done |
+| 06b | — | Code banking and the banked HWB profile (ADR 0013, amendment A5) | next |
 | 07 | — | Interrupts and system timer | — |
 | 08 | — | Context switching | — |
 | 09 | — | Serial driver and `ostest` | — |
