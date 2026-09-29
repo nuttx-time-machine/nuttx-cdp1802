@@ -53,7 +53,17 @@ later
 [11 bytes, irq]" ] || fail "IRQ-driven console input: $out"
 echo "ok: console input (polled, IRQ 6, delayed chunks, EOF)"
 
-# 5. Upstream behaviour kept: 10 Hz wall-clock timer, LSIE, DIS/RET, IDL.
+# 5. ROM emulation: __sim1802_rom_end write-protects [0, limit).
+printf '.global __sim1802_rom_end\n.set __sim1802_rom_end, 0x8000\n' > "$B/romend.s"
+$T-gcc -Os -o "$B/probe-rom.elf" "$A/probe.c" "$A/sim_io.S" "$B/romend.s" -Wl,-Tdata=0x8000
+set +e; out=$(scripts/run.sh "$B/probe-rom.elf" wp 2>&1); rc=$?; set -e
+[ $rc -eq 97 ] && grep -q 'write to write-protected address' <<< "$out" \
+  || fail "ROM write not trapped ($rc)"
+set +e; scripts/run.sh "$B/probe-rom.elf" halt; rc=$?; set -e
+[ $rc -eq 42 ] || fail "program with protected ROM does not run ($rc)"
+echo "ok: __sim1802_rom_end write protection"
+
+# 6. Upstream behaviour kept: 10 Hz wall-clock timer, LSIE, DIS/RET, IDL.
 out=$(scripts/run.sh "$B/irqtest.elf" 5)
 grep -qx 'idle: 5 wakeups, irq_count advanced 5' <<< "$out" || fail "10 Hz timer: $out"
 echo "ok: upstream 10 Hz timer mode unchanged"
