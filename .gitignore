@@ -4,3 +4,4 @@ build/
 *.o
 *.elf
 __pycache__/
+erl_crash.dump
