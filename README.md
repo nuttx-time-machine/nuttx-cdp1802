@@ -14,7 +14,7 @@ It has two goals of equal weight (see [`CONTRACT.md`](CONTRACT.md)):
 | Step | Tag | What it delivers | State |
 |------|-----|------------------|-------|
 | 00 | `step-00-bootstrap` | Meta repo, layout, pinned NuttX/apps | done |
-| 01 | `step-01-toolchain` | Toolchain built from pinned SHAs, hello + soft-float in the simulator, ABI documented | — |
+| 01 | `step-01-toolchain` | Toolchain built from pinned SHAs, hello + soft-float in the simulator, ABI documented | done |
 | 02 | `step-02-sim-audit` | Simulator capability audit (**GATE**) | — |
 | 03 | — | Virtual board definition | — |
 | 04 | — | Size feasibility (**GATE**) | — |
