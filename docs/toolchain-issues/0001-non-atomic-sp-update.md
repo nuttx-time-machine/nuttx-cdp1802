@@ -1,6 +1,6 @@
 # 0001 — Stack-pointer adjustments are not interrupt-safe
 
-Status: **open**, draft report prepared (not sent)
+Status: **fixed locally** by a GCC patch (ADR 0007, 2026-09-29); upstream report and patch drafted, **not sent**
 Found: Step 01, 2026-09-29
 Toolchain: `cdp1802-unknown-elf-gcc (GCC) 15.3.1 20260919`, mikpe/gcc `8b18811140ea`
 
@@ -84,7 +84,10 @@ A safe ordering exists with no extra register:
   phi 2` gives `(fp_hi−1, old_lo)` < fp; then `glo fp; plo 2; ghi fp; phi 2`)
   at the cost of three instructions.
 
-Options (decision needed before Step 07; Steps 04–06 do not enable interrupts):
+**Decision (Alan, 2026-09-29): option 1**, implemented in
+`toolchain/patches/gcc/0001-cdp1802-make-stack-pointer-updates-interrupt-safe.patch`
+and verified statically and by an interrupt stress test (ADR 0007). The
+options were:
 
 1. **Patch GCC** (the two templates above), plus a verifier that scans every
    linked NuttX image for R2 writes and rejects unknown patterns. Needs an ADR
@@ -126,3 +129,13 @@ it.
 > `-minterrupt-safe-sp`?
 >
 > Thanks for the toolchain!
+
+## Addendum for the draft report (NOT SENT)
+
+> A patch implementing the orderings above is attached
+> (`0001-cdp1802-make-stack-pointer-updates-interrupt-safe.patch`, against
+> gcc15-cdp1802 @ 8b18811140ea). With a standard R2-stack interrupt handler
+> firing every 211 machine cycles, a test with 20/300-byte and variable-size
+> frames corrupts 63 bytes of live stack with the current compiler (and
+> hangs at a 157-cycle period) and none with the patch (319 774 interrupts). Loading SP from memory is used by
+> libgcc's SJLJ unwinder (`uw_install_context`), so that case is covered too.

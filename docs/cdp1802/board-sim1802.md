@@ -133,6 +133,14 @@ code runs on boards that do use DMA (register convention, ADR 0006).
 | Console | 0xE0 PUTCHAR (buffer → stdout), 0xE1 GETCHAR, 0xE2 STATUS (bit 0 data, bit 1 EOF) | 6, level-triggered | `up_putc`/lowputc (Step 06), serial driver (Step 09) |
 | Halt | 0x00 HALT: exit the simulator with the buffer as status | — | `board_power_off()`, test exit codes |
 
+**The argument/result buffer is shared by all devices.** A command is two
+instructions (`OUT 6` argument, then `OUT 7` command), and an interrupt can
+arrive between them. An interrupt handler that issues commands must
+therefore give the buffer back unchanged: push it on entry with
+`DEC 2; INP 6` (INP stores the byte at M(R2)) and restore it on exit with
+`OUT 6` (which also pops it). Found the hard way: a test handler's IRQ mask
+0x01 was printed instead of a character (journal step-04, Part 0).
+
 Exit statuses reserved by the simulator: 1 (invalid opcode), 96
 (`--max-cycles` reached), 97 (trap: write to ROM, IDL with IE=0, …), 98
 (`NYI` pseudo-op). Test programs use 0 for success.
@@ -163,12 +171,14 @@ the `.data` copy fails (undefined RAM), and that ROM writes are ignored or
 trapped as selected.
 
 ```
-ok: hw32 boots from its 342-byte ROM image (@ cycles 26109)
-ok: hw32 RAM is undefined at power-on (missing .data copy is caught)
+PASS: sim1802 fork
+ok: hw32 boots from its 350-byte ROM image (@ cycles 26053)
+ok: hw32 works from 8 power-on states; without .data copy: 1/8 correct, 8 distinct outputs
 ok: hw32 ROM write ignored (default) / trapped (--rom-writes trap)
-ok: sim64 boots from its 342-byte ROM image (@ cycles 26109)
-ok: sim64 RAM is undefined at power-on (missing .data copy is caught)
+ok: sim64 boots from its 350-byte ROM image (@ cycles 26053)
+ok: sim64 works from 8 power-on states; without .data copy: 1/8 correct, 8 distinct outputs
 ok: sim64 ROM write ignored (default) / trapped (--rom-writes trap)
 ok: linker scripts reject oversized images
 PASS: step 03
 ```
+(ISR with I/O-buffer save/restore, patched compiler, 2026-09-29.)

@@ -86,8 +86,12 @@ must restore X exactly.
 > 39/50 (`objdump -d | grep`). Hypothesis **H2** ("R2 must always be a valid
 > stack pointer") therefore does **not** hold for GCC-generated code. See
 > [`toolchain-issues/0001`](../toolchain-issues/0001-non-atomic-sp-update.md).
-> The Step 07 interrupt entry must not push on R2 before switching to a known
-> stack.
+> **Fixed** by a local GCC patch (ADR 0007): every composite update of R2
+> now keeps each intermediate value at or below the live stack top, so the
+> standard R2-stack interrupt entry (ADR 0006) is safe. The price is a stack
+> guard band of 256 bytes (511 with VLA/alloca). With the patch, the 20-byte
+> frame above is allocated as
+> `ghi 2; adi 0xff; phi 2; glo 2; adi 0xec; plo 2; ghi 2; adci 0; phi 2`.
 
 ## 4. Call and return: NCRT [ABI-TXT, confirmed OBS]
 
