@@ -46,7 +46,7 @@ fi
 echo "ok: ostest passed"
 
 base=$(grep -o '[0-9a-f]\{40\}' docs/VERSIONS.md | head -1)
-(cd nuttx && PATH=$PWD/../build:$PATH ./tools/checkpatch.sh -g "$base..HEAD" 2>&1 | tail -1) \
+(cd nuttx && PATH=$PWD/../build:$PATH ./tools/checkpatch.sh -r -g "$base..HEAD" 2>&1 | tail -1) \
   | grep -q "All checks pass" || fail "checkpatch on $base..HEAD"
 for f in $(cd nuttx && git ls-files 'arch/cosmac/*.c' 'arch/cosmac/*.h' 'boards/cosmac/*.c' 'boards/cosmac/*.h'); do
   o=$(build/nxstyle "nuttx/$f"); [ -z "$o" ] || { echo "$o"; fail "nxstyle $f"; }

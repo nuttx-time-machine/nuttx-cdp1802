@@ -4,8 +4,10 @@
 #   SCHED_RR tasks take turns under preemption, a semaphore ping-pong runs
 #   in order, usleep() sleeps the right number of ticks, signals reach a
 #   blocked task and (from an interrupt) a running one, tasks exit
-#   (scripts/check-threads.py verifies the interleaved output).  Both
-#   interrupt-state variants.  Also measures a thread-level context switch
+#   (scripts/check-threads.py verifies the interleaved output), and printf
+#   converts every integer size.  Both
+#   interrupt-state variants, and CONFIG_NO_POSIX_COMPLIANT (no long long
+#   in printf).  Also measures a thread-level context switch
 #   from an instruction trace (hypothesis H5).
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -13,8 +15,13 @@ cd "$(dirname "$0")/.."
 fail() { echo "FAIL: $*"; exit 1; }
 
 printf '# CONFIG_COSMAC_IRQSTATE_LSIE is not set\nCONFIG_COSMAC_IRQSTATE_SWFLAG=y\n' > build/frag-swflag
-for v in lsie swflag; do
-  [ $v = lsie ] && frag= || frag=$PWD/build/frag-swflag
+printf 'CONFIG_NO_POSIX_COMPLIANT=y\n' > build/frag-noposix
+for v in lsie swflag noposix; do
+  case $v in
+    lsie) frag= ;;
+    swflag) frag=$PWD/build/frag-swflag ;;
+    noposix) frag=$PWD/build/frag-noposix ;;
+  esac
   b=build/step08-$v
   BUILD_FRAGMENT=$frag scripts/build.sh sim1802:threads step08-$v > /dev/null || fail "$v: build"
   [ -s $b/diagnostics.txt ] && { cat $b/diagnostics.txt; fail "$v: diagnostics"; }
@@ -23,7 +30,8 @@ for v in lsie swflag; do
   rc=$?
   [ $rc = 0 ] || { cat $b/output.txt; fail "$v: exit $rc"; }
   r=$(python3 scripts/check-threads.py $b/output.txt $(scripts/cycles-per-tick.sh $b/config) \
-      $(sed -n 's/^CONFIG_USEC_PER_TICK=//p' $b/config)) || { cat $b/output.txt; echo "$r"; fail "$v: output"; }
+      $(sed -n 's/^CONFIG_USEC_PER_TICK=//p' $b/config) \
+      $(grep -q '^CONFIG_LIBC_LONG_LONG=y' $b/config && echo y || echo n)) || { cat $b/output.txt; echo "$r"; fail "$v: output"; }
   echo "ok: $v: $r; $(grep 'sched_yield' $b/output.txt | sed 's/threads: //')"
 done
 grep "stack bytes" build/step08-lsie/output.txt | sed 's/^threads: /    /'
@@ -40,7 +48,7 @@ t=$(awk '/^TOTAL/ { print $(NF-1) }' $b/switch-profile.txt)
 echo "ok: thread-level context switch $t machine cycles = $((t * 8)) clocks (H5: ~2000 clocks)"
 
 base=$(grep -o '[0-9a-f]\{40\}' docs/VERSIONS.md | head -1)
-(cd nuttx && PATH=$PWD/../build:$PATH ./tools/checkpatch.sh -g "$base..HEAD" 2>&1 | tail -1) \
+(cd nuttx && PATH=$PWD/../build:$PATH ./tools/checkpatch.sh -r -g "$base..HEAD" 2>&1 | tail -1) \
   | grep -q "All checks pass" || fail "checkpatch on $base..HEAD"
 for f in $(cd nuttx && git ls-files 'arch/cosmac/*.c' 'arch/cosmac/*.h' 'boards/cosmac/*.c' 'boards/cosmac/*.h'); do
   o=$(build/nxstyle "nuttx/$f"); [ -z "$o" ] || { echo "$o"; fail "nxstyle $f"; }

@@ -8,6 +8,8 @@ import sys
 # microseconds per tick; defaults: the 50 Hz tick of Steps 08-10.
 cyc_tick = int(sys.argv[2]) if len(sys.argv) > 2 else 10000
 usec_tick = int(sys.argv[3]) if len(sys.argv) > 3 else 20000
+# argv[4]: "y" when printf supports long long (CONFIG_LIBC_LONG_LONG)
+longlong = (sys.argv[4] if len(sys.argv) > 4 else "y") == "y"
 out = open(sys.argv[1]).read()
 lines = [l for l in out.splitlines() if l.startswith("threads:")]
 fails = []
@@ -52,6 +54,15 @@ for s in ("signal 10 handled", "blocked task: sem_wait() EINTR",
 storm = re.search(r"signal storm: (\d+) signals, (\d+) errors", out)
 need(storm and int(storm.group(1)) >= 100 and storm.group(2) == "0",
      "signal storm: >= 100 signals, 0 errors")
+
+# 6. printf: every integer size; long long values are printed whole with
+#    CONFIG_LIBC_LONG_LONG, else as their low 32 bits, and "|7" shows that
+#    the argument list stayed in step either way
+want = ("threads: printf -12345 65535 beef -2000000000 4000000000 deadbeef "
+        "-123456789 %s %s 40000|7" % (("4886718345", "fedcba9876543210")
+                                      if longlong else
+                                      ("591751049", "76543210")))
+need(want in out, "printf line: " + want)
 
 # 5. Context switches, task exit, end
 need(re.search(r"200 sched_yield\(\) round trips: \d+ cycles", out), "yield")

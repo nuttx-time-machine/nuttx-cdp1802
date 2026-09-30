@@ -37,7 +37,7 @@ for f in $(cd nuttx && git ls-files 'arch/cosmac/*.c' 'arch/cosmac/*.h' 'boards/
 done
 echo "ok: nxstyle"
 base=$(grep -o '[0-9a-f]\{40\}' docs/VERSIONS.md | head -1)
-(cd nuttx && PATH=$PWD/../build:$PATH ./tools/checkpatch.sh -g "$base..HEAD" 2>&1 | tail -1) \
+(cd nuttx && PATH=$PWD/../build:$PATH ./tools/checkpatch.sh -r -g "$base..HEAD" 2>&1 | tail -1) \
   | grep -q "All checks pass" || fail "checkpatch on $base..HEAD"
 echo "ok: checkpatch $base..HEAD"
 [ -s docs/porting-guide/07-startup.md ] || fail "missing guide chapter 07"
