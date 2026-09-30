@@ -366,3 +366,48 @@ The new pieces also help other configurations:
 
 After them, all step tests pass: ostest exit 0 with 2.52 G cycles, and
 `ps` at 3.40 M cycles, +1.5 % from placement shifts.
+
+## printf without long long (Alan, 2026-09-30)
+
+Alan asked for printf without `long long`, and a `CONFIG_NO_POSIX_COMPLIANT`
+that removes everything that needs 64-bit arithmetic (ADR 0025). He also
+asked me to confirm that the size builds use `CONFIG_DEFAULT_SMALL`: they
+do. `sim1802:nshflat`, `minimal`, `nsh` and `ostest` all set it.
+
+- `CONFIG_NO_POSIX_COMPLIANT` selects `SYSTEM_TIME32`, turns off
+  `FS_LARGEFILE` and the new `CONFIG_LIBC_LONG_LONG`.
+- Without `CONFIG_LIBC_LONG_LONG`, printf converts integers in
+  `unsigned long`. "ll" and "j" arguments are still read whole, but only
+  their low 32 bits are printed.
+- After it, no 64-bit helper routine is linked in `sim1802:nshflat`. The
+  remaining 64-bit code in the linked sources is all behind options that
+  are off (`LIBC_MEMSET_64BIT`, `FDSAN`, `HRTIMER`).
+
+| `sim1802:nshflat` linked flat (HW48/16) | ROM | Over 48 KiB |
+|---|---:|---:|
+| before (ADR 0024) | 72 032 | 22 882 |
+| `CONFIG_NO_POSIX_COMPLIANT` | **65 857** | **16 706** |
+
+Tests:
+- the thread test now prints every integer conversion, including
+  `long long` values above 32 bits followed by one more argument;
+- `test-step-08.sh` checks it in three variants, the new one with the
+  option;
+- the first run showed that a Kconfig *default* does not switch
+  `LIBC_LONG_LONG` off in an existing configuration, so it is now a
+  dependency;
+- ostest with the option passes: exit 0, 24 tests, 0 errors;
+- all step tests pass.
+
+Two findings:
+- **Upstream removed `CONFIG_LIBC_LONG_LONG` in May 2026** (`1b3af76bf3`)
+  to always support `long long`. This change undoes that locally.
+- The upstream printf files already fail nxstyle (78 alignment errors).
+  The step tests now run checkpatch on changed lines only
+  (`docs/cdp1802/style.md`).
+
+Still 16.7 KB over 48 KiB. By part:
+- file system: 14.3 KB;
+- printf and formatting: now about 7 KB;
+- task management: 9.7 KB;
+- NSH: 8.1 KB.

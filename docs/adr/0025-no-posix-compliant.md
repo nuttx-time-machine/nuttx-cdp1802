@@ -58,9 +58,15 @@ NuttX has no option to leave `long long` out of printf.
   32 bits without, and in both cases that the next argument is right.
   `scripts/test-step-08.sh` runs it in a third variant with
   `NO_POSIX_COMPLIANT`.
-- Upstream: `LIBC_LONG_LONG` restores an option NuttX once had, so it is
-  a reasonable proposal. `NO_POSIX_COMPLIANT` is a policy switch that
-  upstream may prefer to spell differently.
+- **Upstream removed this option on purpose.** Commit `1b3af76bf3`
+  (May 2026, "!libc/stream: remove CONFIG_LIBC_LONG_LONG and always
+  support long long") removed it, and `c32b683085` dropped
+  `CONFIG_HAVE_LONG_LONG`, to simplify the code. Restoring it goes against
+  a recent upstream decision. It is kept here as a port-local change;
+  proposing it upstream would need the size argument for 8-bit CPUs
+  (6.2 KB on the CDP1802) and would likely meet resistance.
+- The touched upstream files already fail nxstyle, so the step tests now
+  run checkpatch on changed lines only (`docs/cdp1802/style.md`).
 
 ## How to revisit
 
