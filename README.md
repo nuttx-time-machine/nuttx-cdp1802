@@ -29,6 +29,8 @@ It has two goals of equal weight (see [`CONTRACT.md`](CONTRACT.md)):
 
 ## Reproduce
 
+To build and run NSH in the simulator, see [docs/cdp1802/running.md](docs/cdp1802/running.md).
+
 ```sh
 git clone --recurse-submodules <this repo> cdp1802 && cd cdp1802
 toolchain/build-toolchain.sh          # ~30-60 min: Erlang/OTP, binutils, GCC, libc, sim1802
