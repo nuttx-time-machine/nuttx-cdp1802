@@ -49,3 +49,4 @@ step tag that depends on it was not objected to. The agent writes new ADRs as
 | [0023](0023-speed-nsh.md) | Speed: GCC inline options (toolchain patch 0002), hot placement, same-bank far calls, 16-bit division path | Proposed (agent) — requested by Alan; toolchain patch needs approval |
 | [0024](0024-small-configurations.md) | Small configurations: minimal console driver, board-started NSH, sim1802:nshflat | Proposed (agent) |
 | [0025](0025-no-posix-compliant.md) | Common code: CONFIG_NO_POSIX_COMPLIANT (32-bit time, no large files, printf without long long via CONFIG_LIBC_LONG_LONG) | Proposed — requested by Alan; common-code change needs his review |
+| [0026](0026-seqlock-16bit.md) | Common code: tick seqlock sequence kept in uint32_t (system hung after 65 536 ticks on 16-bit int) | Proposed — bug fix, needs Alan's review; upstream patch prepared |

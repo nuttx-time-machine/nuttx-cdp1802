@@ -1,0 +1,40 @@
+From a21849d29deed4e659865a400ab44356c8d449d8 Mon Sep 17 00:00:00 2001
+From: Alan Carvalho de Assis <acassis@gmail.com>
+Date: Wed, 30 Sep 2026 14:23:40 -0300
+Subject: [PATCH] sched/clock: keep the seqlock sequence in uint32_t
+
+clock_get_sched_ticks() stored the value of read_seqbegin(), a
+uint32_t, in an unsigned int and passed it back to read_seqretry().
+Where int is 16 bits the copy is truncated, so once the 32-bit
+sequence number passes 65535 read_seqretry() always reports a change
+and the loop never ends.  The sequence advances once per tick, so after
+65536 ticks (11 minutes at 100 Hz) the next caller, the timer interrupt
+itself, spins forever with interrupts disabled and the system stops.
+
+Seen on the CDP1802 (16-bit int): NSH stopped answering after 55
+minutes at 20 Hz.  AVR has the same problem.  hrtimer's readers of the
+same lock already use uint32_t.
+
+Signed-off-by: Alan Carvalho de Assis <acassis@gmail.com>
+Generated-by: Claude Opus 5.5 (claude-opus-5-5) via Claude Code
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ sched/clock/clock_sched_ticks.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/sched/clock/clock_sched_ticks.c b/sched/clock/clock_sched_ticks.c
+index 282a51450f..48de47c272 100644
+--- a/sched/clock/clock_sched_ticks.c
++++ b/sched/clock/clock_sched_ticks.c
+@@ -117,7 +117,7 @@ void clock_increase_sched_ticks(clock_t ticks)
+ clock_t clock_get_sched_ticks(void)
+ {
+   clock_t ret;
+-  unsigned int seq;
++  uint32_t seq;
+ 
+   do
+     {
+-- 
+2.43.0
+

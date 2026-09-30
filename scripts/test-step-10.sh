@@ -59,6 +59,18 @@ for c in help ps free uptime; do
   echo "$c: $((n - base)) machine cycles"
 done
 
+# Long uptime: more than 65 536 ticks (55 min at 20 Hz).  The seqlock that
+# guards the tick count kept its sequence number in a 16-bit unsigned int,
+# so the tick interrupt spun forever at tick 65 536 (ADR 0026).  Without
+# --pace the idle simulator reaches that in about 13 s of host time.
+out=$( (sleep 30; printf 'uptime\n'; sleep 4; printf 'poweroff\n') \
+      | RUN_TIMEOUT=90 scripts/run.sh $b/nuttx.elf 2>&1 | tr -d '\r')
+up=$(grep -o 'up *[0-9]*:[0-9]*' <<< "$out" | head -1)
+mins=$(awk -F'[ :]+' '{ print $2 * 60 + $3 }' <<< "$up")
+[ -n "$up" ] || { echo "$out"; fail "no answer to uptime after a long idle"; }
+[ "$mins" -ge 55 ] || fail "only $up after 30 s: host too slow to pass 65536 ticks"
+echo "ok: NSH answers after 65536 ticks ($up)"
+
 base=$(grep -o '[0-9a-f]\{40\}' docs/VERSIONS.md | head -1)
 (cd nuttx && PATH=$PWD/../build:$PATH ./tools/checkpatch.sh -r -g "$base..HEAD" 2>&1 | tail -1) \
   | grep -q "All checks pass" || fail "checkpatch on $base..HEAD"

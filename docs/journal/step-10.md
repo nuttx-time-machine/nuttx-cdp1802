@@ -411,3 +411,42 @@ Still 16.7 KB over 48 KiB. By part:
 - printf and formatting: now about 7 KB;
 - task management: 9.7 KB;
 - NSH: 8.1 KB.
+
+## NSH stops after 65 536 ticks (found by Alan, 2026-09-30)
+
+Alan ran `sim1802:nsh` by hand. `ps` did not answer, and neither did
+anything typed afterwards. The investigation:
+
+1. **`/proc` was mounted**: `free` worked. `ps` worked in every
+   automated test, including through a pseudo-terminal and with Alan's
+   exact command sequence.
+2. **Typing one character at a time**: `scripts/typing-test.py` passed
+   120 commands. While reading the simulator's console code for this, I
+   found a real race: a byte arriving while the queue was being drained
+   could lose its interrupt. It was fixed in the fork (`f195be3`), but it
+   was not the cause.
+3. **The cause was elapsed time.** The failing run waited 10 s before
+   typing again. Without `--pace` the simulator runs idle time at full
+   speed, about 150 M cycles/s here, so the pause crossed 65 536 ticks
+   (1.64 G cycles). Measured:
+   - five runs of that sequence: five hangs;
+   - boot and wait: answers up to 60 k ticks, none from about 66 k;
+   - memory dumps: `g_system_ticks` = 65 536 and the tick seqlock's
+     sequence = 0x00010000, frozen;
+   - the CPU spins in `clock_get_sched_ticks()`, whose sequence copy is an
+     `unsigned int` (16 bits here) compared against a `uint32_t` (ADR
+     0026).
+4. **Fix:** `uint32_t seq`. NSH now answers at 1 h 48 min of uptime.
+   `test-step-10.sh` checks an uptime past 65 536 ticks; without the fix
+   it fails, verified by reverting.
+
+On real hardware the port would have stopped after 55 minutes at 20 Hz.
+The bug is in upstream master (since `29e514b276`, 2026-01) and affects
+every 16-bit-`int` target. The patch for mainline is in `docs/upstream/`
+(not sent).
+
+Lessons for the tests:
+- **run for a long time:** the step tests all ran for well under 65 536
+  ticks, and ostest's virtual 64 MHz clock makes its ticks longer;
+- **test the way a person uses it:** Alan found this in a minute of
+  interactive use.
