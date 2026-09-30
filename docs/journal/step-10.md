@@ -292,3 +292,77 @@ Regression on the final commits: steps 06, 06b, 07, 08, 09 (ostest exit
 0, 24 tests, 2.51 G cycles at 20 Hz) and 10 pass, as do the GCC inline
 test (10 builds), the banking test and the div64 vectors (648, with and
 without the inline options).
+
+## Flat NSH, second attempt (Alan, 2026-09-30)
+
+Alan asked me to use `CONFIG_DISABLE_ALL_SIGNALS` and to disable every
+other NSH command and feature that can go, to fit 48 KiB.
+
+`sim1802:nshflat` is the result (`scripts/measure-flat-nsh.sh`). Its NSH
+has only `help`, `poweroff` and `quit`: `DEFAULT_SMALL` already disables
+every other command, and scripting, background commands, the semicolon,
+aliases and pipelines. It has no signals, pthreads, POSIX message queues,
+environment, POSIX timers, mount points or procfs. NSH error messages are
+off, readline is minimal and stdio unbuffered. The measurements, linked
+flat for HW48/16:
+
+| Step | ROM | Over 48 KiB |
+|---|---:|---:|
+| NSH (help, poweroff) + serial driver + `DISABLE_ALL_SIGNALS` and the options above | 93 464 | 44 315 |
+| minimal console driver instead of the serial driver (`CONFIG_SIM1802_CONSOLE`, new) | 77 288 | 28 139 |
+| NSH started by the board, no `task_spawn()` (`CONFIG_SIM1802_START_NSH`, new); compact 64-bit division; NSH error messages off | 72 006 | 22 854 |
+| echo in the console driver (final) | **72 032** | **22 882** |
+
+**It does not fit: 72.0 KB against 48 KiB.** On the banked profile the same
+configuration runs, which is how the test checks it: `help`, an unknown
+command and `poweroff`. A Kconfig inconsistency in NuttX got in the way:
+`DISABLE_ALL_SIGNALS` selects `DISABLE_MQUEUE_NOTIFICATION`, whose
+dependency needs one kind of message queue, so `configure.sh` refuses the
+combination "no signals and no message queues at all". SysV message
+queues stay enabled; they add little, because unused code is discarded at
+link time. That is an upstream report candidate.
+
+What the remaining 72 KB is, grouped from the link map (code and
+read-only data):
+
+| Part | Bytes | Share |
+|---|---:|---:|
+| file system: VFS, file table, `/dev/console` | 14 338 | 19.9 % |
+| printf and number formatting (`vsprintf`, streams, 64-bit division) | 13 302 | 18.5 % |
+| tasks, task groups, start-up | 9 668 | 13.4 % |
+| NSH and readline | 8 074 | 11.2 % |
+| semaphores, mutexes, atomics | 5 122 | 7.1 % |
+| time and clock | 4 959 | 6.9 % |
+| scheduler core, interrupts, assertions | 4 082 | 5.7 % |
+| memory manager | 3 724 | 5.2 % |
+| strings, ctype, `strtol` | 3 469 | 4.8 % |
+| port, board, libgcc, other | 5 184 | 7.2 % |
+
+None of it can be switched off any further:
+- **File descriptors:** every task's file list is set up through the
+  spawn file-action code, which pulls in the scheduler-parameter
+  functions.
+- **printf:** NSH prints everything with `dprintf`, and NuttX's printf
+  has no option without `long long`.
+- **Time:** the clock is initialized from a calendar date.
+
+Reaching 48 KiB needs about a third less code. The possibilities:
+- **compiler code density**, the only lever that shrinks everything. With
+  no indexed addressing, a 16-bit field load through a pointer takes
+  10 instructions;
+- **a small printf** for NuttX (a libc change);
+- **a leaner file layer** for a single console (common-code changes);
+- **fixing toolchain issue 0002**, which saves the cost of the
+  `-fno-split-wide-types` workaround (about 5.4 KB at Step 04).
+
+As a flat system, NSH needs at least 72 KB of ROM with this compiler.
+That also rules out SIM64, whose 64 KiB must hold RAM as well.
+
+The new pieces also help other configurations:
+- the minimal console driver;
+- the board-started NSH;
+- the compact `udivmod64`, which is 2.1 KB instead of 4.6 KB in every
+  configuration.
+
+After them, all step tests pass: ostest exit 0 with 2.52 G cycles, and
+`ps` at 3.40 M cycles, +1.5 % from placement shifts.

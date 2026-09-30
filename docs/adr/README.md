@@ -47,3 +47,4 @@ step tag that depends on it was not objected to. The agent writes new ADRs as
 | [0021](0021-open-flags-16bit-int.md) | Common code: open() flags above bit 15 remapped for 16-bit int (O_DIRECTORY, O_CLOEXEC, O_NOFOLLOW) | Proposed — needs Alan (common-code change) |
 | [0022](0022-nsh-configuration.md) | NSH on HWB: procfs mount, BRS depth 24, fail-stop BRS overflow | Proposed (agent) — Step 10 GATE |
 | [0023](0023-speed-nsh.md) | Speed: GCC inline options (toolchain patch 0002), hot placement, same-bank far calls, 16-bit division path | Proposed (agent) — requested by Alan; toolchain patch needs approval |
+| [0024](0024-small-configurations.md) | Small configurations: minimal console driver, board-started NSH, sim1802:nshflat | Proposed (agent) |
