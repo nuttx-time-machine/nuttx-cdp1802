@@ -23,7 +23,7 @@ It has two goals of equal weight (see [`CONTRACT.md`](CONTRACT.md)):
 | 06b | `step-06b-banking` | Code banking: bank window, trampoline, placement tool, HWB profile (ADR 0013) | done |
 | 07 | `step-07-irq-timer` | Interrupts and the 50 Hz system tick (HWB), LSIE or RAM-copy IE | done |
 | 08 | `step-08-context` | Context switching, stacks, task exit, signals (HWB); H5 validated (311 cycles) | done |
-| 09 | — | Serial driver and `ostest` | — |
+| 09 | `step-09-ostest` | Serial driver; ostest passes (HWB, virtual 64 MHz clock, ADR 0020) | done |
 | 10 | — | NSH or infeasibility report (**GATE**) | — |
 | 11 | — | CI, final docs, upstream-readiness report | — |
 

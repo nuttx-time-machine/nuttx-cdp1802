@@ -41,3 +41,6 @@ step tag that depends on it was not objected to. The agent writes new ADRs as
 | [0015](0015-interrupts.md) | Interrupts: LSIE or RAM copy of IE, one register frame, one restore path | Proposed (agent); IE options per Alan (Q4) |
 | [0016](0016-tick-rate.md) | 50 Hz tick, 1 KiB idle stack, tick path in fixed ROM | Proposed (agent) |
 | [0017](0017-context-switch.md) | Context switch: one frame and restore path, signals redirect the frame in place, per-thread bank state | Proposed (agent) |
+| [0018](0018-apps-and-link-order.md) | ostest fixes for 16-bit int (apps); libgcc linked after the libraries | Proposed (agent) |
+| [0019](0019-pthread-cond-wait-count.md) | Common code: condition variable wait count and cmpxchg locals as int32_t (lost wake-up on 16-bit big-endian) | Proposed — needs Alan (common-code change) |
+| [0020](0020-ostest-virtual-clock.md) | ostest at a virtual 64 MHz clock; 4 MHz timing limits documented | Proposed (agent) — flagged for Alan |

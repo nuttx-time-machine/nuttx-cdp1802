@@ -26,7 +26,7 @@ LIBC_SHA=833e87f23663be5a958e2f805a163c6630ef5c51
 # so it is built from the submodule, which must be checked out at SIM_SHA.
 SIM_SRC=simulator
 SIM_BRANCH=cdp1802-nuttx
-SIM_SHA=b5c3f1d16a48490b605c2039fde4731bf431490e
+SIM_SHA=1afb629684b78971ca53498d1260562fd8d2d89c
 
 # Upstream sim1802, installed as $TARGET-sim-upstream.  Step 02 audits it.
 SIM_UPSTREAM_URL=https://github.com/mikpe/sim1802.git

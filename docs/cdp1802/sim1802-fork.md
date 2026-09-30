@@ -21,6 +21,8 @@ exists and how it was verified.
 | `708bd2c` | README for ROM mode | documentation |
 | `bc30f84` | `--banks N [--bank-port P]`: a 16 KiB bank-switched ROM window at 0x8000 in `--rom` mode; the image is the fixed ROM followed by the banks; an 8-bit latch on `OUT P` (default 1) selects the bank; it powers up random; eunit test `banks_test` | Code banking (ADR 0013, Step 06b): NuttX does not fit a flat 64 KiB address space |
 | `b5c3f1d` | Trace lines for addresses in the bank window end with ` [bN]` (the selected bank) | Profiling banked code (`scripts/trace-profile.py --elf`, Step 08): the window's symbol names are ambiguous |
+| `d52240f` | The console reader stays registered after EOF | Bug found at Step 09: after EOF every STATUS/GETCHAR started a new reader, which raised IRQ 6 again, an endless interrupt stream for an interrupt-driven serial driver |
+| `1afb629` | `--dump FILE`: memory image (64 KiB as the CPU sees it) and registers at exit | Post-mortem of hangs where only the tick runs (Step 09: found the console-lock deadlock of ostest's restart test) |
 | `1be386b` | ELF segments loaded at `p_paddr` (load address), not `p_vaddr` | A ROM image keeps `.data`'s initial values in ROM and copies them to RAM. With `p_vaddr` the ROM copy was never loaded (found by the Step 03 smoke test). Ordinary images have `p_paddr == p_vaddr`. |
 
 Cycle counts come from RCA MPM-201A p. 8 (2 machine cycles per instruction,

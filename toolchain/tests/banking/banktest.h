@@ -25,6 +25,7 @@ unsigned long b_chain(int n, unsigned long acc);
 int b_triple(int x);
 int b_inc(int x);
 long b_args(int a, int b, int c, int d, int e, int f, long g);
+intfn_t b_fn(int i);
 
 /* bank 2 */
 

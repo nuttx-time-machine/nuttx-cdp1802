@@ -157,6 +157,9 @@ int main(void)
       check(a_args(x, 2, 3, 4, 5, 6, round),
             (long)(x + 1) * 4 + 6 * 8 + 10 * 12 + (long)round * 2 -
             (x + 1) + (long)x * x);
+      check(b_fn(0)(x), 7L * x);                 /* static, via its stub */
+      check(b_fn(1) == b_triple, 1);             /* same stub as &b_triple */
+      check(a_apply(b_fn(0), x), 7L * x + (x ^ 0x5a));
       for (i = 0; i < sizeof(g_fns) / sizeof(g_fns[0]); i++)
         {
           int f = g_fns[i](x);

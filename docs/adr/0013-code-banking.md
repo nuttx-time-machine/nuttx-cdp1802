@@ -149,6 +149,39 @@ points. The interrupt may arrive while P=4 or P=5, with R4/R5 pointing
 into the middle of the routine (see also abi.md §4). The banking test's
 interrupt routine does this (`toolchain/tests/banking/isr_bank.S`).
 
+## Revision at step-09: placement by function, stubs for every cross-bank reference
+
+ostest overflowed the fixed ROM, because:
+- objects that take the address of one of their own functions had to be
+  fixed (24 of them);
+- an object larger than a bank (`spinlock.c`, 35 KB) could not be placed.
+
+The tool (`tools/cosmac/cosmac_bank.py`) now works as follows:
+
+- **Placement unit = code section** (one function with
+  `-ffunction-sections`). Objects are still placed whole when they fit and
+  are split function by function when they do not.
+- **Every reference is decided on its own.** Calls within a bank, or to
+  fixed ROM, stay direct. Calls from another region, and every use of a
+  banked function's *address*, go through a stub.
+- References that must not use the name the object renames are
+  **rewritten in the ELF file**: a new symbol-table entry, and the
+  relocation pointed at it (`ElfObject.rewrite`). For a global function
+  the new entry is a placeholder that `objcopy` renames back to the
+  function's name, i.e. its normal stub, so pointers to it compare equal
+  everywhere. A static function gets a generated stub
+  (`__cosmac_ptr_N` → `__cosmac_fn_N`).
+- Objects stay fixed only if they have code outside `.text*` or a symbol
+  defined twice.
+- The banking test (`toolchain/tests/banking`) covers it: a table of a
+  static and a global function in bank 1, used from fixed code and from
+  bank 0, and a pointer-equality check.
+
+**Read-only data is still always fixed**, and it is now the limit:
+ostest's strings take about 20 KB of the 32 KiB fixed ROM. The
+architecture library, apart from its switching code, and the memory
+manager moved to banks to make room (ADR 0016 keeps the tick path fixed).
+
 ## How to revisit
 
 If flat HW48/16 becomes feasible (compiler fix), banking can be switched off
