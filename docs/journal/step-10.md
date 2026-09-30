@@ -123,7 +123,11 @@ Profile of `ps` (`scripts/trace-profile.py --start cmd_ps --stop
 readline_fd`, 9.19 M cycles):
 - the NCRT call/return routines take 2.74 M (30 %);
 - far-call trampolines take 1.16 M (13 %);
-- the 50 Hz tick path takes about 1.1 M (12 %);
+- the 50 Hz tick takes about a third: each tick costs 3 381 cycles of a
+  10 000-cycle tick period, and 31 % of the cycles in a sampled part of
+  `ps` were interrupt code. (An earlier version of this journal said 12 %.
+  That added up only the tick functions' own cycles, not the NCRT calls
+  they make, which the profile counts under `cosmac_ncrt_*`.)
 - formatting (`vsprintf_internal`, `memoutstream_puts`, `ultoa`) and
   16-bit shift/compare helpers take most of the rest;
 - the console output path takes about 0.3 M.

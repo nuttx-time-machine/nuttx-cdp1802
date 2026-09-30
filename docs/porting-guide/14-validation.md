@@ -78,7 +78,8 @@ run ends with a status as in 14.1.
 >   fix).
 >
 > At 4 MHz, `ps` takes 19 s. About 30 % of that is the NCRT
-> call/return routines, 13 % is far calls, and 12 % is the tick.
+> call/return routines, 13 % is far calls, and about a third is the 50 Hz
+> tick. These overlap: the tick's own calls go through NCRT.
 
 ## Checklist
 
