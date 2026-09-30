@@ -44,3 +44,5 @@ step tag that depends on it was not objected to. The agent writes new ADRs as
 | [0018](0018-apps-and-link-order.md) | ostest fixes for 16-bit int (apps); libgcc linked after the libraries | Proposed (agent) |
 | [0019](0019-pthread-cond-wait-count.md) | Common code: condition variable wait count and cmpxchg locals as int32_t (lost wake-up on 16-bit big-endian) | Proposed — needs Alan (common-code change) |
 | [0020](0020-ostest-virtual-clock.md) | ostest at a virtual 64 MHz clock; 4 MHz timing limits documented | Proposed (agent) — flagged for Alan |
+| [0021](0021-open-flags-16bit-int.md) | Common code: open() flags above bit 15 remapped for 16-bit int (O_DIRECTORY, O_CLOEXEC, O_NOFOLLOW) | Proposed — needs Alan (common-code change) |
+| [0022](0022-nsh-configuration.md) | NSH on HWB: procfs mount, BRS depth 24, fail-stop BRS overflow | Proposed (agent) — Step 10 GATE |

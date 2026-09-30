@@ -102,6 +102,28 @@ thread's own stack, exactly there (there is no interrupt stack). Building
 the copy there overwrote the handler's return addresses; Step 08 found this
 as a jump into RAM. Hence the redirect in place.
 
+## The free byte above the frame is saved too
+
+The redirected frame resumes `cosmac_sigdeliver()` with SP = E, and its
+first instruction pushes to M(E). The byte M(E) is the thread's free byte,
+which by convention is not live, but it *is* live for a few instructions
+at a time:
+- in `cosmac_ncrt_ret`, after `lda 2` it holds the low byte of the return
+  address, read by the `ldn 2` that follows;
+- in `cosmac_ncrt_call`, between `str 2` and `ldn 2` it holds the high
+  byte of the call target;
+- in compiled code, the ALU instructions take one operand from M(R2).
+
+The interrupt entry keeps M(E) (it starts with `dec 2`), so ordinary
+interrupts are safe. Signal delivery was not: a signal that arrived inside
+such a window corrupted the interrupted code's data. Step 10 found this as
+a jump to the reset vector in the Step 08 test, which depended on code
+layout. Since then `up_schedule_sigaction()` saves the frame *and* M(E)
+(`XCPTCONTEXT_SIGSIZE` = 32 bytes), and `cosmac_sigreturn` restores both.
+The thread test's "signal storm" checks this. It fails without the fix;
+with the fix, in one run at least 8 of its signals landed inside such a
+window and were handled correctly.
+
 ## Measured cost (Step 08, machine cycles; 1 machine cycle = 8 clocks)
 
 | Path | Cycles |

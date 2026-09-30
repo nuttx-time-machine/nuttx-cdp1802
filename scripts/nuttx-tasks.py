@@ -4,7 +4,11 @@
 # Post-mortem task list from a sim1802 memory image (sim1802 --dump FILE):
 # walks NuttX's PID hash and prints, for every thread, its state, priority,
 # preemption lock count, what it waits on (resolved to a symbol) and the
-# PC in its saved register frame (resolved in the thread's own bank).
+# PC in its saved register frame (resolved in the thread's own bank) and,
+# with banking, the bank return stack's high-water mark: TCBs are
+# zero-allocated, so the deepest non-zero 3-byte entry is the deepest
+# far-call nesting the thread has reached (an estimate: an entry {0, 0, 0}
+# would not count).
 #
 # The struct tcb_s offsets depend on the configuration, so they are
 # computed by compiling a small probe against the NuttX tree, which must be
@@ -20,11 +24,11 @@ import tempfile
 
 TARGET = "cdp1802-unknown-elf"
 FIELDS = ["pid", "task_state", "sched_priority", "lockcount", "waitobj",
-          "xcp.regs", "xcp.bankstate"]
+          "xcp.regs", "xcp.bankstate", "xcp.brs"]
 PROBE = """#include <nuttx/config.h>
 #include <stddef.h>
 #include <nuttx/sched.h>
-const unsigned int g_off[] = { %s, sizeof(tstate_t) };
+const unsigned int g_off[] = { %s, sizeof(tstate_t), %s };
 """
 STATES = ["INVALID", "PENDING", "READYTORUN", "RUNNING", "INACTIVE",
           "WAIT_SEM", "WAIT_SIG"]
@@ -32,8 +36,9 @@ STATES = ["INVALID", "PENDING", "READYTORUN", "RUNNING", "INACTIVE",
 
 def offsets(nuttx):
     fields = [f for f in FIELDS
-              if f != "xcp.bankstate" or banking(nuttx)]
-    src = PROBE % ", ".join("offsetof(struct tcb_s, %s)" % f for f in fields)
+              if not f.startswith("xcp.b") or banking(nuttx)]
+    src = PROBE % (", ".join("offsetof(struct tcb_s, %s)" % f for f in fields),
+                   "CONFIG_COSMAC_BRS_DEPTH" if banking(nuttx) else "0")
     with tempfile.TemporaryDirectory() as d:
         c, o = os.path.join(d, "p.c"), os.path.join(d, "p.o")
         open(c, "w").write(src)
@@ -45,11 +50,12 @@ def offsets(nuttx):
                               check=True, capture_output=True,
                               text=True).stdout
     data = bytes.fromhex("".join(
-        "".join(l.split()[1:5]) for l in dump.splitlines()
-        if re.match(r"^ [0-9a-f]{4} ", l)))
-    vals = struct.unpack(">%dH" % (len(fields) + 1), data[:2 * (len(fields) + 1)])
+        l[6:41].replace(" ", "") for l in dump.splitlines()
+        if re.match(r"^ [0-9a-f]{4} ", l)))  # the hex columns only
+    vals = struct.unpack(">%dH" % (len(fields) + 2), data[:2 * (len(fields) + 2)])
     off = dict(zip(fields, vals))
-    off["state_size"] = vals[-1]
+    off["state_size"] = vals[-2]
+    off["brs_depth"] = vals[-1]
     return off
 
 
@@ -119,14 +125,20 @@ def main():
         pc = word(regs + 25) if regs else 0
         waitobj = word(t + off["waitobj"])
         heap = glob.get("_ebss", 0x10000) <= waitobj
-        print("pid %-3d %-10s prio %-3d lock %d  wait %04x %-28s pc %s" % (
+        brs = ""
+        if "xcp.brs" in off:
+            e = [mem[t + off["xcp.brs"] + 3 * k:t + off["xcp.brs"] + 3 * k + 3]
+                 for k in range(off["brs_depth"])]
+            used = max([k + 1 for k in range(len(e)) if any(e[k])] or [0])
+            brs = "  brs %d/%d" % (used, off["brs_depth"])
+        print("pid %-3d %-10s prio %-3d lock %d  wait %04x %-28s pc %s%s" % (
             word(t + off["pid"]),
             STATES[state] if state < len(STATES) else str(state),
             mem[t + off["sched_priority"]],
             word(t + off["lockcount"]),
             waitobj, "(heap)" if heap else
             "(%s)" % resolve(waitobj, 0, fixed, banks) if waitobj else "",
-            resolve(pc, bank, fixed, banks) if regs else "-"))
+            resolve(pc, bank, fixed, banks) if regs else "-", brs))
 
 
 if __name__ == "__main__":

@@ -58,6 +58,23 @@ Constraints:
 - Round-robin processing (`sched_roundrobin.o`) is on the tick path and was
   added to the fixed-ROM rules (ADR 0016).
 
+## Revision at step-10: the redirected frame keeps the free byte above it
+
+The redirect in place resumes `cosmac_sigdeliver()` with SP at the
+interrupted thread's free byte M(SP), and its first push overwrote that
+byte. The byte is live inside `cosmac_ncrt_ret` (the return address's low
+byte), inside `cosmac_ncrt_call` (the call target's high byte) and in
+compiled ALU sequences. The interrupt entry protects it with `dec 2`; the
+signal path did not. A signal in such a window corrupted the thread (found
+in step 10 as a layout-dependent jump to the reset vector in the Step 08
+test).
+
+The fix: `up_schedule_sigaction()` saves 32 bytes (`XCPTCONTEXT_SIGSIZE`:
+the frame and M(SP)), and `cosmac_sigreturn` restores both. The cost is
+1 byte of TCB and one copy iteration per signal. The thread test gained a
+"signal storm" that fails without the fix (journal step-10;
+`docs/cdp1802/context.md`).
+
 ## How to revisit
 
 - An interrupt stack would allow the usual copy-below signal frame, and

@@ -42,6 +42,9 @@ need(len(sl) == 3 and all(11 <= t <= 16 for t in sl), "usleep 11..16 ticks: %s" 
 for s in ("signal 10 handled", "blocked task: sem_wait() EINTR",
           "signal 12 handled", "running task stopped by its signal"):
     need("threads: " + s in out, s)
+storm = re.search(r"signal storm: (\d+) signals, (\d+) errors", out)
+need(storm and int(storm.group(1)) >= 100 and storm.group(2) == "0",
+     "signal storm: >= 100 signals, 0 errors")
 
 # 5. Context switches, task exit, end
 need(re.search(r"200 sched_yield\(\) round trips: \d+ cycles", out), "yield")
@@ -51,4 +54,4 @@ need("FAIL" not in out and "assert" not in out.lower(), "no failure/assertion")
 if fails:
     print("\n".join("FAIL: " + f for f in fails))
     sys.exit(1)
-print("rr turns=%d, usleep ticks=%s" % (turns, sl))
+print("rr turns=%d, usleep ticks=%s, storm signals=%s" % (turns, sl, storm.group(1)))

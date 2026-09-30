@@ -59,3 +59,9 @@ there when a signal is sent from interrupt context.
 - Registers that are "constant" for C code but may be anything in an
   interrupted frame (on the 1802, R4/R5): reset them in the trampoline's
   frame.
+- Memory the interrupted code still needs just above its stack pointer.
+  Your interrupt entry may protect it, as the 1802 entry's `dec 2` keeps
+  the free byte M(R2); the signal trampoline, which runs on the same stack
+  from the same stack pointer, must protect it as well. Test this with
+  many signals sent to a *running* task that makes calls in a loop (the
+  CDP1802 thread test's "signal storm", Step 10).

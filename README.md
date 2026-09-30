@@ -24,7 +24,7 @@ It has two goals of equal weight (see [`CONTRACT.md`](CONTRACT.md)):
 | 07 | `step-07-irq-timer` | Interrupts and the 50 Hz system tick (HWB), LSIE or RAM-copy IE | done |
 | 08 | `step-08-context` | Context switching, stacks, task exit, signals (HWB); H5 validated (311 cycles) | done |
 | 09 | `step-09-ostest` | Serial driver; ostest passes (HWB, virtual 64 MHz clock, ADR 0020) | done |
-| 10 | — | NSH or infeasibility report (**GATE**) | — |
+| 10 | `step-10-nsh` | NSH with help, ps, free, uptime on HWB (**GATE**); fixes: open flags on 16-bit int (ADR 0021), BRS overflow, signal free byte (Step 08 bug) | done — awaiting Alan's gate decision (journal step-10) |
 | 11 | — | CI, final docs, upstream-readiness report | — |
 
 ## Reproduce

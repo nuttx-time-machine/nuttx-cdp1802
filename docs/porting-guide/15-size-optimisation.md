@@ -81,7 +81,14 @@ its own, so the port has to provide all of it:
    unsafe, e.g. when it takes the address of its own static function (that
    pointer would bypass the stub). Let the linker check the result: GNU ld's
    `OVERLAY … NOCROSSREFS` rejects any direct reference between two banks.
-7. **Test without the OS first:** a freestanding program with several
+7. **Size the bank return stack like a stack,** and make overflow
+   fail-stop. The depth a thread needs is its deepest nesting of far
+   calls, which you can measure: if the stack is zero-initialised, its
+   deepest non-zero entry in a memory dump is the high-water mark. The
+   overflow handler must not itself make a far call on the full stack:
+   switch to a spare one first. Otherwise the overflow repeats until the C
+   stack runs out.
+8. **Test without the OS first:** a freestanding program with several
    banks, stack arguments, function pointers, tail calls and an interrupt
    routine that calls banked code. Run it under a fast timer interrupt and
    compare every result with the same computation done in fixed code.
@@ -98,6 +105,10 @@ its own, so the port has to provide all of it:
 > - The freestanding test (`scripts/test-banking.sh`) ran with 34 553
 >   interrupts at a 1 499-cycle period, spread over the whole loop including
 >   the trampolines, with no error.
+> - NSH's `ps` nests 18 far calls, more than the default depth of 16.
+>   `sim1802:nsh` uses 24 (ADR 0022). Before the handler was fixed, the
+>   overflow report was itself a banked call, so the recursion ran the
+>   stack through `.bss`.
 
 **Cost model.** Banking trades ROM for time. Keep hot code (memory
 allocation, scheduler fast paths, interrupt dispatch) fixed or in the same
@@ -113,11 +124,14 @@ file-system setup, shell commands) in banks. The placement report
 - [ ] Every size workaround has an ADR and a way back.
 - [ ] If you bank code: a freestanding banking test runs under interrupts;
       the placement report is part of the build output; the context switch
-      saves the bank state.
+      saves the bank state; the bank return stack depth is measured, and
+      an overflow stops the system cleanly.
 
 ## Common pitfalls
 
 - Banking read-only data, or code that runs while the bank state changes.
+- A bank return stack that is too shallow for one code path. A shell
+  command nests deeper than the OS test did. Measure every configuration.
 - A function pointer to the banked copy instead of the stub (own-address
   rule, 15.5 item 6).
 - An interrupt handler that calls C without resetting the registers your

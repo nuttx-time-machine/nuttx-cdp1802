@@ -1,6 +1,7 @@
 # 14. Validation: ostest and step tests
 
-> First tag: `step-09-ostest`. ADRs 0019, 0020; journal `step-09.md`.
+> First tag: `step-09-ostest` (14.4: `step-10-nsh`). ADRs 0019–0022;
+> journals `step-09.md`, `step-10.md`.
 
 ## 14.1 Test every step, automatically
 
@@ -59,6 +60,26 @@ scheduling and more. Expect three kinds of trouble:
   options where possible. It separates "the test or common code does this
   everywhere" from "only my port does this".
 
+## 14.4 An interactive shell
+
+After ostest, bring up NSH with a few commands that exercise the rest of
+the system: `ps` (procfs, directory reads, formatted output), `free` (heap
+statistics) and `uptime` (timekeeping). Drive it from a script on the
+console input, with a command such as `poweroff` at the end, so that the
+run ends with a status as in 14.1.
+
+> **CDP1802 example** (`sim1802:nsh`, `scripts/test-step-10.sh`, journal
+> step-10). Three bugs appeared that ostest had not found:
+> - The bank return stack overflowed in `ps` (15.5).
+> - `ps` printed "Could not open /proc": a **common-code bug**.
+>   `O_DIRECTORY` is `1U << 16`, which is 0 where `int` is 16 bits, so
+>   `opendir()` opened `/proc` as a file (ADR 0021).
+> - `uptime`'s `1 << 16` fixed-point constant overflowed `int` (an apps
+>   fix).
+>
+> At 4 MHz, `ps` takes 19 s. About 30 % of that is the NCRT
+> call/return routines, 13 % is far calls, and 12 % is the tick.
+
 ## Checklist
 
 - [ ] Every test run ends with a status: pass, assertion, or cycle limit.
@@ -74,5 +95,8 @@ scheduling and more. Expect three kinds of trouble:
   sleeps. Measure how long one printed line takes first.
 - Atomic operations on fields that are not the size the atomic API
   assumes (`volatile void *` parameters hide it from the compiler).
+- Flag and mask constants built with shifts past the width of `int`.
+  Warnings from macros in headers passed with `-isystem` are suppressed:
+  compile a one-line test to see what the constant really is.
 - Stdin tied to a terminal or socket in automated runs: use `/dev/null`
   or a file.
