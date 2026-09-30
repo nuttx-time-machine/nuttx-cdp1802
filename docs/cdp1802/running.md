@@ -45,8 +45,15 @@ RUN_TIMEOUT=0 scripts/run.sh build/sim1802-nsh/nuttx.elf
 
 - `run.sh` boots the raw ROM image (`nuttx.bin`, as an EPROM would hold
   it) with the bank count taken from the ELF. The ELF is only used for
-  symbol names. The underlying command is
-  `cdp1802-unknown-elf-sim --rom nuttx.elf.bin --rom-size 32768 --banks 16 --symbols nuttx.elf`.
+  symbol names. The underlying commands, from the build directory, are
+
+  ```sh
+  cd build/sim1802-nsh
+  cdp1802-unknown-elf-objcopy -O binary --gap-fill 0xff nuttx.elf nuttx.elf.bin
+  cdp1802-unknown-elf-sim --rom nuttx.elf.bin --rom-size 32768 --banks 16 --symbols nuttx.elf
+  ```
+- Do not run two builds at the same time: every build uses the same
+  `nuttx/` and `apps/` trees.
 - `RUN_TIMEOUT=0` removes the default 120 s time limit; Ctrl-C stops the
   simulator.
 - Type NSH commands. Each line appears twice: once from your terminal,
