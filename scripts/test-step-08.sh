@@ -22,7 +22,8 @@ for v in lsie swflag; do
   RUN_TIMEOUT=600 scripts/run.sh --max-cycles 400000000 $b/nuttx.elf > $b/output.txt 2>&1
   rc=$?
   [ $rc = 0 ] || { cat $b/output.txt; fail "$v: exit $rc"; }
-  r=$(python3 scripts/check-threads.py $b/output.txt) || { cat $b/output.txt; echo "$r"; fail "$v: output"; }
+  r=$(python3 scripts/check-threads.py $b/output.txt $(scripts/cycles-per-tick.sh $b/config) \
+      $(sed -n 's/^CONFIG_USEC_PER_TICK=//p' $b/config)) || { cat $b/output.txt; echo "$r"; fail "$v: output"; }
   echo "ok: $v: $r; $(grep 'sched_yield' $b/output.txt | sed 's/threads: //')"
 done
 grep "stack bytes" build/step08-lsie/output.txt | sed 's/^threads: /    /'

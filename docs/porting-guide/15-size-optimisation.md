@@ -116,6 +116,40 @@ bank as its callers, and put large, rarely called code (formatted output,
 file-system setup, shell commands) in banks. The placement report
 (`nuttx.banks`) and the step's cycle counts tell you whether the rules work.
 
+## 15.6 Speed on a slow CPU
+
+Size and speed pull in opposite directions. Once code banking makes ROM
+plentiful, spend ROM on speed where profiles show it pays:
+
+1. **Profile inclusively.** A flat "cycles per function" profile hides
+   *why* code is slow. An inclusive profile, with each function plus
+   everything it calls, rebuilt from an instruction trace, shows which
+   operation is expensive.
+2. **Check the system tick.** Its cost is fixed per tick. At 50 Hz a tick
+   of about 3 400 cycles took a third of a 4 MHz CDP1802; at 20 Hz it
+   takes 14 %.
+3. **Look for library calls in hot code.** Calls, comparisons and shifts
+   that the compiler turns into subroutine calls cost the call overhead
+   every time. Inline versions are often barely larger, and sometimes
+   smaller.
+4. **Place code by call frequency,** not only by size. Small functions
+   called from everywhere (`memcpy`, string functions, atomics, locks)
+   belong in fixed ROM, and a caller should share a bank with its hot
+   callees.
+5. **Make the common case of the trampoline cheap,** for example a far
+   call whose target is already in the selected bank.
+
+> **CDP1802 example** (ADR 0023): NSH's `ps` took 9.59 M machine cycles
+> (19.2 s at 4 MHz); after these steps it takes 3.35 M (6.7 s):
+> - 20 Hz tick: −16 %;
+> - compiler options for inline calls, comparisons and shifts, plus a
+>   16-bit division path: −45 %;
+> - hot functions in fixed ROM: −20 %;
+> - same-bank fast path and co-located formatting: −5 %.
+>
+> What remains is mostly the generated code itself, and the design of
+> `ps` (procfs text formatted and parsed again).
+
 ## Checklist
 
 - [ ] The minimal configuration and its size are in the size budget, and
@@ -126,6 +160,9 @@ file-system setup, shell commands) in banks. The placement report
       the placement report is part of the build output; the context switch
       saves the bank state; the bank return stack depth is measured, and
       an overflow stops the system cleanly.
+- [ ] Hot paths are profiled inclusively; the tick rate, library calls
+      in hot code and the placement of widely called functions have been
+      checked.
 
 ## Common pitfalls
 

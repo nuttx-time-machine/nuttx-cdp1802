@@ -1,0 +1,485 @@
+From f383cfdef0ebb69aadb04c3f039372c6c501d1c7 Mon Sep 17 00:00:00 2001
+From: Alan Carvalho de Assis <acassis@gmail.com>
+Date: Wed, 30 Sep 2026 10:19:57 -0300
+Subject: [PATCH] cdp1802: add -minline-calls, -minline-compare and
+ -minline-shifts
+
+Three options, all off by default (the default output is unchanged):
+
+-minline-calls: a call to a known address pushes the return address
+itself (low byte first, as the NCRT call routine does) and branches:
+"ldi lo; stxd; ldi hi; stxd; lbr f" is 11 machine cycles instead of
+about 37 through the NCRT routine, and 6 bytes more per call.  X is 2
+at every call site.  Indirect calls still use __call_reg.
+
+-minline-compare: 16-bit comparisons are expanded inline instead of
+calling __cmphi_*; a constant second operand is used as an immediate
+(the predicate of cbranchhi4 accepts it only with this option, so the
+default register allocation does not change).
+
+-minline-shifts: 16-bit shifts by a constant are expanded inline
+instead of calling __ashlhi3, __lshrhi3 or __ashrhi3.
+
+Signed-off-by: Alan Carvalho de Assis <acassis@gmail.com>
+Generated-by: Claude Opus 5.5 (claude-opus-5-5) via Claude Code
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ gcc/config/cdp1802/cdp1802-protos.h |   6 +
+ gcc/config/cdp1802/cdp1802.cc       | 244 ++++++++++++++++++++++++++++
+ gcc/config/cdp1802/cdp1802.md       |  79 +++++++--
+ gcc/config/cdp1802/cdp1802.opt      |  12 ++
+ gcc/config/cdp1802/predicates.md    |   7 +
+ 5 files changed, 338 insertions(+), 10 deletions(-)
+
+diff --git a/gcc/config/cdp1802/cdp1802-protos.h b/gcc/config/cdp1802/cdp1802-protos.h
+index cc7edb747..aad6d4ad5 100644
+--- a/gcc/config/cdp1802/cdp1802-protos.h
++++ b/gcc/config/cdp1802/cdp1802-protos.h
+@@ -25,6 +25,12 @@ extern void cdp1802_cpu_cpp_builtins (cpp_reader *);
+ extern bool cdp1802_direct_return_p (void);
+ extern bool cdp1802_epilogue_uses_p (int);
+ extern bool cdp1802_expand_ashlhi3 (rtx, rtx, rtx);
++extern bool cdp1802_expand_shift_const (enum rtx_code, rtx *);
++extern const char *cdp1802_output_shift_const (enum rtx_code, rtx *);
++extern int cdp1802_shift_const_length (enum rtx_code, rtx *);
++extern const char *cdp1802_output_cbranchhi_inline (rtx *, int);
++extern int cdp1802_cbranchhi_inline_length (rtx *, int);
++extern const char *cdp1802_output_call (int);
+ extern void cdp1802_expand_call (rtx, rtx, rtx);
+ extern void cdp1802_expand_cbranchhi4 (enum rtx_code, rtx, rtx, rtx);
+ extern void cdp1802_expand_epilogue (bool);
+diff --git a/gcc/config/cdp1802/cdp1802.cc b/gcc/config/cdp1802/cdp1802.cc
+index 938f98df9..e6689f7ad 100644
+--- a/gcc/config/cdp1802/cdp1802.cc
++++ b/gcc/config/cdp1802/cdp1802.cc
+@@ -1420,6 +1420,250 @@ cdp1802_expand_ashlhi3 (rtx dst, rtx arg, rtx amount)
+   return false;
+ }
+ 
++/* Length in bytes of an instruction sequence template, as output by the
++   routines below: one instruction per line, "N:" lines are labels.  */
++
++static int
++cdp1802_template_length (const char *t)
++{
++  static const char *const two[] = { "ldi", "xri", "ani", "ori", "smi", "smbi",
++				     "sdi", "sdbi", "adi", "adci", NULL };
++  static const char *const three[] = { "lbr", "lbz", "lbnz", "lbdf", "lbnf",
++				       NULL };
++  int len = 0;
++
++  while (*t)
++    {
++      char op[8];
++      int n = 0;
++
++      while (*t == '\n' || *t == '\t' || *t == ' ')
++	t++;
++      while (*t && *t != ' ' && *t != '\n' && *t != '\t' && n < 7)
++	op[n++] = *t++;
++      op[n] = '\0';
++      while (*t && *t != '\n')
++	t++;
++      if (n == 0 || op[n - 1] == ':')
++	continue;
++      if (!strcmp (op, "sep") || !strcmp (op, ".hword"))
++	len += !strcmp (op, "sep") ? 1 : 2;
++      else
++	{
++	  int add = 1;
++
++	  for (int i = 0; two[i]; i++)
++	    if (!strcmp (op, two[i]))
++	      add = 2;
++	  for (int i = 0; three[i]; i++)
++	    if (!strcmp (op, three[i]))
++	      add = 3;
++	  len += add;
++	}
++    }
++  return len;
++}
++
++/* Output template for a call insn; ALTERNATIVE 1 is an indirect call
++   through __call_reg.  With -minline-calls a call to a known address pushes
++   the return address itself (low byte first, as the NCRT call routine does)
++   and branches to the callee: 11 machine cycles instead of about 37.  X is
++   2 at every call site (see cdp1802_expand_prologue), as STXD needs.  */
++
++const char *
++cdp1802_output_call (int alternative)
++{
++  if (alternative == 1)
++    return "sep 4\n\t.hword __call_reg";
++  if (TARGET_INLINE_CALLS)
++    return "ldi %%lo(1f)\n\tstxd\n\tldi %%hi(1f)\n\tstxd\n\tlbr %0\n1:";
++  return "sep 4\n\t.hword %0";
++}
++
++/* Expand a 16-bit shift by a constant inline (-minline-shifts).  */
++
++bool
++cdp1802_expand_shift_const (enum rtx_code code, rtx *operands)
++{
++  rtx insn;
++
++  if (!TARGET_INLINE_SHIFTS
++      || !CONST_INT_P (operands[2])
++      || !IN_RANGE (INTVAL (operands[2]), 1, 15))
++    return false;
++
++  switch (code)
++    {
++    case ASHIFT:
++      insn = gen_ashlhi3_const (operands[0], operands[1], operands[2]);
++      break;
++    case LSHIFTRT:
++      insn = gen_lshrhi3_const (operands[0], operands[1], operands[2]);
++      break;
++    case ASHIFTRT:
++      insn = gen_ashrhi3_const (operands[0], operands[1], operands[2]);
++      break;
++    default:
++      gcc_unreachable ();
++    }
++  emit_insn (insn);
++  return true;
++}
++
++/* Output a 16-bit shift of operand 0 (tied to operand 1) by the constant
++   operand 2.  Counts of 8 or more move a byte first.  SHL/SHR/SHLC/SHRC go
++   through DF; the arithmetic right shift copies the sign into DF with SHL
++   before each SHRC of the high byte.  */
++
++const char *
++cdp1802_output_shift_const (enum rtx_code code, rtx *operands)
++{
++  static char buf[1024];
++  int n = INTVAL (operands[2]);
++  const char *step;
++
++  buf[0] = '\0';
++  if (n >= 8)
++    {
++      switch (code)
++	{
++	case ASHIFT:
++	  strcat (buf, "glo %0\n\tphi %0\n\tldi 0\n\tplo %0");
++	  step = "\n\tghi %0\n\tshl\n\tphi %0";
++	  break;
++	case LSHIFTRT:
++	  strcat (buf, "ghi %0\n\tplo %0\n\tldi 0\n\tphi %0");
++	  step = "\n\tglo %0\n\tshr\n\tplo %0";
++	  break;
++	case ASHIFTRT:
++	  /* High byte := 0xff if negative, else 0: DF = sign;
++	     0xff + 0 + DF = 0 (DF=1) or 0xff (DF=0), then complement.  */
++	  strcat (buf, "ghi %0\n\tplo %0\n\tshl\n\tldi 0xff\n\tadci 0\n\t"
++		  "xri 0xff\n\tphi %0");
++	  step = "\n\tghi %0\n\tshl\n\tglo %0\n\tshrc\n\tplo %0";
++	  break;
++	default:
++	  gcc_unreachable ();
++	}
++      n -= 8;
++    }
++  else
++    {
++      switch (code)
++	{
++	case ASHIFT:
++	  step = "\n\tglo %0\n\tshl\n\tplo %0\n\tghi %0\n\tshlc\n\tphi %0";
++	  break;
++	case LSHIFTRT:
++	  step = "\n\tghi %0\n\tshr\n\tphi %0\n\tglo %0\n\tshrc\n\tplo %0";
++	  break;
++	case ASHIFTRT:
++	  step = "\n\tghi %0\n\tshl\n\tghi %0\n\tshrc\n\tphi %0\n\tglo %0\n\t"
++		 "shrc\n\tplo %0";
++	  break;
++	default:
++	  gcc_unreachable ();
++	}
++    }
++  while (n-- > 0)
++    strcat (buf, buf[0] ? step : step + 2);
++  return buf;
++}
++
++int
++cdp1802_shift_const_length (enum rtx_code code, rtx *operands)
++{
++  return cdp1802_template_length (cdp1802_output_shift_const (code,
++							      operands));
++}
++
++/* Output an inline 16-bit compare-and-branch (-minline-compare): branch to
++   operand 3 if operand 1 <op> operand 2.  ALTERNATIVE 1 has a constant
++   operand 2.  Magnitude comparisons subtract low byte then high byte and
++   test DF (1 = no borrow); signed ones flip both sign bits first.  Uses
++   MEM[SP] as scratch, as the other 16-bit patterns do.  */
++
++const char *
++cdp1802_output_cbranchhi_inline (rtx *operands, int alternative)
++{
++  static char buf[256];
++  enum rtx_code code = GET_CODE (operands[0]);
++  bool imm = alternative == 1;
++  bool sgn = code == LT || code == LE || code == GT || code == GE;
++  const char *flip = sgn ? "\n\txri 0x80" : "";
++  unsigned int c = imm ? (unsigned int) (INTVAL (operands[2]) & 0xffff) : 0;
++  unsigned int cl = c & 0xff;
++  unsigned int ch = ((c >> 8) & 0xff) ^ (sgn ? 0x80 : 0);
++
++  switch (code)
++    {
++    case EQ:
++    case NE:
++      {
++	const char *br = code == EQ ? "lbnz 1f" : "lbnz %3";
++	const char *last = code == EQ ? "lbz %3\n1:" : "lbnz %3";
++
++	if (!imm)
++	  snprintf (buf, sizeof buf, "glo %%2\n\tstr 2\n\tglo %%1\n\txor\n\t"
++		    "%s\n\tghi %%2\n\tstr 2\n\tghi %%1\n\txor\n\t%s", br, last);
++	else if (c == 0)
++	  snprintf (buf, sizeof buf, "glo %%1\n\t%s\n\tghi %%1\n\t%s",
++		    br, last);
++	else
++	  snprintf (buf, sizeof buf, "glo %%1\n\txri 0x%02x\n\t%s\n\t"
++		    "ghi %%1\n\txri 0x%02x\n\t%s", cl, br, (c >> 8) & 0xff,
++		    last);
++	return buf;
++      }
++
++    case GEU:
++    case LTU:
++    case GE:
++    case LT:
++      {
++	/* DF := op1 >= op2.  */
++	const char *br = (code == GEU || code == GE) ? "lbdf" : "lbnf";
++
++	if (!imm)
++	  snprintf (buf, sizeof buf, "glo %%2\n\tstr 2\n\tglo %%1\n\tsm\n\t"
++		    "ghi %%2%s\n\tstr 2\n\tghi %%1%s\n\tsmb\n\t%s %%3",
++		    flip, flip, br);
++	else
++	  snprintf (buf, sizeof buf, "glo %%1\n\tsmi 0x%02x\n\tghi %%1%s\n\t"
++		    "smbi 0x%02x\n\t%s %%3", cl, flip, ch, br);
++	return buf;
++      }
++
++    case GTU:
++    case LEU:
++    case GT:
++    case LE:
++      {
++	/* DF := op2 >= op1.  */
++	const char *br = (code == LEU || code == LE) ? "lbdf" : "lbnf";
++
++	if (!imm)
++	  snprintf (buf, sizeof buf, "glo %%1\n\tstr 2\n\tglo %%2\n\tsm\n\t"
++		    "ghi %%1%s\n\tstr 2\n\tghi %%2%s\n\tsmb\n\t%s %%3",
++		    flip, flip, br);
++	else
++	  snprintf (buf, sizeof buf, "glo %%1\n\tsdi 0x%02x\n\tghi %%1%s\n\t"
++		    "sdbi 0x%02x\n\t%s %%3", cl, flip, ch, br);
++	return buf;
++      }
++
++    default:
++      gcc_unreachable ();
++    }
++}
++
++int
++cdp1802_cbranchhi_inline_length (rtx *operands, int alternative)
++{
++  return cdp1802_template_length (cdp1802_output_cbranchhi_inline
++				  (operands, alternative));
++}
++
+ #undef  TARGET_OVERRIDE_OPTIONS_AFTER_CHANGE
+ #define TARGET_OVERRIDE_OPTIONS_AFTER_CHANGE cdp1802_override_options_after_change
+ 
+diff --git a/gcc/config/cdp1802/cdp1802.md b/gcc/config/cdp1802/cdp1802.md
+index 59329f815..a52e483c8 100644
+--- a/gcc/config/cdp1802/cdp1802.md
++++ b/gcc/config/cdp1802/cdp1802.md
+@@ -603,6 +603,8 @@
+   {
+     if (cdp1802_expand_ashlhi3 (operands[0], operands[1], operands[2]))
+       DONE;
++    if (cdp1802_expand_shift_const (ASHIFT, operands))
++      DONE;
+     /* internal_debug_bt ("ashlhi3 generated"); */
+     FAIL;
+   })
+@@ -627,6 +629,8 @@
+   ]
+   ""
+   {
++    if (cdp1802_expand_shift_const (ASHIFTRT, operands))
++      DONE;
+     FAIL;
+   })
+ 
+@@ -638,9 +642,43 @@
+   ]
+   ""
+   {
++    if (cdp1802_expand_shift_const (LSHIFTRT, operands))
++      DONE;
+     FAIL;
+   })
+ 
++;; Shifts by a constant, expanded inline with -minline-shifts.  DF and D
++;; are clobbered, as by the library routines.
++(define_insn "ashlhi3_const"
++  [(set (match_operand:HI 0 "register_operand" "=c")
++	(ashift:HI (match_operand:HI 1 "register_operand" "0")
++		   (match_operand:HI 2 "const_int_operand" "n")))
++  ]
++  "TARGET_INLINE_SHIFTS"
++  "* return cdp1802_output_shift_const (ASHIFT, operands);"
++  [(set (attr "length")
++	(symbol_ref "cdp1802_shift_const_length (ASHIFT, operands)"))])
++
++(define_insn "lshrhi3_const"
++  [(set (match_operand:HI 0 "register_operand" "=c")
++	(lshiftrt:HI (match_operand:HI 1 "register_operand" "0")
++		     (match_operand:HI 2 "const_int_operand" "n")))
++  ]
++  "TARGET_INLINE_SHIFTS"
++  "* return cdp1802_output_shift_const (LSHIFTRT, operands);"
++  [(set (attr "length")
++	(symbol_ref "cdp1802_shift_const_length (LSHIFTRT, operands)"))])
++
++(define_insn "ashrhi3_const"
++  [(set (match_operand:HI 0 "register_operand" "=c")
++	(ashiftrt:HI (match_operand:HI 1 "register_operand" "0")
++		     (match_operand:HI 2 "const_int_operand" "n")))
++  ]
++  "TARGET_INLINE_SHIFTS"
++  "* return cdp1802_output_shift_const (ASHIFTRT, operands);"
++  [(set (attr "length")
++	(symbol_ref "cdp1802_shift_const_length (ASHIFTRT, operands)"))])
++
+ ;; ::::::::::::::::::::
+ ;; ::
+ ;; :: 16-Bit Integer Logical operations
+@@ -709,7 +747,7 @@
+   [(set (pc)
+ 	(if_then_else (match_operator 0 "comparison_operator"
+ 			[(match_operand:HI 1 "register_operand" "a")
+-			 (match_operand:HI 2 "register_operand" "b")])
++			 (match_operand:HI 2 "cdp1802_compare_operand" "b")])
+ 		      (label_ref (match_operand 3 "" ""))
+ 		      (pc)))
+    ;(clobber (reg:BI CARRY_REG))
+@@ -721,6 +759,21 @@
+     DONE;
+   })
+ 
++;; With -minline-compare the comparison is expanded inline: it clobbers D, DF
++;; and the scratch byte MEM[SP].  A constant second operand is used directly.
++(define_insn "*cbranchhi4_inline"
++  [(set (pc)
++	(if_then_else (match_operator:HI 0 "comparison_operator"
++			[(match_operand:HI 1 "register_operand" "c,c")
++			 (match_operand:HI 2 "nonmemory_operand" "c,n")])
++		      (label_ref (match_operand 3 "" ""))
++		      (pc)))
++  ]
++  "TARGET_INLINE_COMPARE"
++  "* return cdp1802_output_cbranchhi_inline (operands, which_alternative);"
++  [(set (attr "length")
++	(symbol_ref "cdp1802_cbranchhi_inline_length (operands, which_alternative)"))])
++
+ ;; HImode comparisons become long sequences of code that clobber both D and DF,
+ ;; as well as either an R-register or the top of the stack.  To reduce code size
+ ;; we call routines in libgcc for the actual comparisons.  These routines take
+@@ -735,7 +788,7 @@
+ 		      (pc)))
+    ;(clobber (reg:BI CARRY_REG))
+   ]
+-  ""
++  "!TARGET_INLINE_COMPARE"
+   "sep 4\n\t.hword __cmphi_%C0\n\tlbdf %3"
+   [(set_attr "length" "6")
+   ])
+@@ -798,10 +851,13 @@
+    (use (match_operand:HI 2 "nonmemory_operand" "X,z"))
+   ]
+   "!SIBLING_CALL_P (insn)"
+-  "@
+-  sep 4\n\t.hword %0
+-  sep 4\n\t.hword __call_reg"	; actual callee in the static chain register (z-constraint)
+-  [(set_attr "length" "3,3")])
++  "* return cdp1802_output_call (which_alternative);"
++  ; alternative 1: actual callee in the static chain register (z-constraint)
++  [(set (attr "length")
++	(if_then_else (and (eq_attr "alternative" "0")
++			   (match_test "TARGET_INLINE_CALLS"))
++		      (const_int 9)
++		      (const_int 3)))])
+ 
+ (define_insn "*sibcall_internal"
+   [(call (mem:QI (match_operand:HI 0 "nonmemory_operand" "i,r"))
+@@ -821,10 +877,13 @@
+    (use (match_operand:HI 2 "nonmemory_operand" "X,z"))
+   ]
+   "!SIBLING_CALL_P (insn)"
+-  "@
+-  sep 4\n\t.hword %0
+-  sep 4\n\t.hword __call_reg"	; actual target in the static chain register (z-constraint)
+-  [(set_attr "length" "3,3")])
++  "* return cdp1802_output_call (which_alternative);"
++  ; alternative 1: actual target in the static chain register (z-constraint)
++  [(set (attr "length")
++	(if_then_else (and (eq_attr "alternative" "0")
++			   (match_test "TARGET_INLINE_CALLS"))
++		      (const_int 9)
++		      (const_int 3)))])
+ 
+ (define_insn "*sibcall_value_internal"
+   [(set (match_operand 3 "register_operand" "=r,r")
+diff --git a/gcc/config/cdp1802/cdp1802.opt b/gcc/config/cdp1802/cdp1802.opt
+index ffa6f1833..ba42270ef 100644
+--- a/gcc/config/cdp1802/cdp1802.opt
++++ b/gcc/config/cdp1802/cdp1802.opt
+@@ -25,3 +25,15 @@ Mask(1804)
+ march=
+ Target RejectNegative Joined Var(cdp1802_arch_option)
+ -march=ARCH	Generate code for the specified CDP1802 family member.
++
++minline-calls
++Target Mask(INLINE_CALLS)
++Call functions at known addresses with an inline push of the return address and a long branch, instead of the NCRT call routine (faster; 6 bytes larger per call).
++
++minline-compare
++Target Mask(INLINE_COMPARE)
++Expand 16-bit comparisons inline instead of calling the __cmphi_* routines (faster, larger).
++
++minline-shifts
++Target Mask(INLINE_SHIFTS)
++Expand 16-bit shifts by a constant inline instead of calling __ashlhi3, __lshrhi3 or __ashrhi3 (faster, larger for most shift counts).
+diff --git a/gcc/config/cdp1802/predicates.md b/gcc/config/cdp1802/predicates.md
+index 2d169aef0..3baba4d7b 100644
+--- a/gcc/config/cdp1802/predicates.md
++++ b/gcc/config/cdp1802/predicates.md
+@@ -27,3 +27,10 @@
+ ;	  && ! satisfies_constraint_Q (op)
+ ;	  && ! satisfies_constraint_R (op));
+ ;})
++
++;; The second operand of a 16-bit comparison: a register, or with
++;; -minline-compare also an integer constant.
++(define_predicate "cdp1802_compare_operand"
++  (ior (match_operand 0 "register_operand")
++       (and (match_test "TARGET_INLINE_COMPARE")
++	    (match_code "const_int"))))
+-- 
+2.43.0
+

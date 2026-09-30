@@ -43,6 +43,19 @@ spent all its time in the tick interrupt (livelock).
 - The tick overhead remains large; it is the first performance item for
   Step 11.
 
+## Revision (Alan, after step-10): 20 Hz
+
+Alan chose a 20 Hz tick (`CONFIG_USEC_PER_TICK=50000`) for every sim1802
+configuration: "20 Hz is fine for a hobbyist system". A tick still costs
+about 3 400 machine cycles, but now once every 25 000 cycles at 4 MHz,
+so the tick takes about 14 % of the CPU instead of 34 %.
+- Measured: NSH `ps` went from 9.59 M to 8.06 M cycles (−16 %).
+- Timer resolution is 50 ms. `usleep()` and time slices round up to it.
+- The `threads` test's round-robin interval went from 100 to 200 ms
+  (4 ticks), so that its 60 ms samples still see the tasks take turns.
+- The tests take their expectations from the build's tick rate
+  (`scripts/cycles-per-tick.sh`).
+
 ## How to revisit
 
 - **Tickless mode** (`CONFIG_SCHED_TICKLESS`) with the simulator's timer in

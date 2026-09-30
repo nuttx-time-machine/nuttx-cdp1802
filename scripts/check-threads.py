@@ -4,6 +4,10 @@
 import re
 import sys
 
+# argv[2]: machine cycles per tick (scripts/cycles-per-tick.sh), argv[3]:
+# microseconds per tick; defaults: the 50 Hz tick of Steps 08-10.
+cyc_tick = int(sys.argv[2]) if len(sys.argv) > 2 else 10000
+usec_tick = int(sys.argv[3]) if len(sys.argv) > 3 else 20000
 out = open(sys.argv[1]).read()
 lines = [l for l in out.splitlines() if l.startswith("threads:")]
 fails = []
@@ -32,11 +36,14 @@ sem = [l for l in lines if " sem " in l]
 want = ["threads: sem %s %d" % (w, i) for i in range(1, 5) for w in ("ping", "pong")]
 need(sem == want, "sem ping/pong order")
 
-# 3. usleep(200 ms): never early (10 ticks + 1), and late only by the CPU
-#    time of the call itself: about 26 000 machine cycles (2.6 ticks at
-#    50 Hz) of setup and wake-up on the banked build (journal step-08)
+# 3. usleep(200 ms): never early (200 ms of ticks + 1), and late only by
+#    the CPU time of the call itself: about 26 000 machine cycles of setup
+#    and wake-up on the banked build (journal step-08); allow 50 000
+lo = 200000 // usec_tick + 1
+hi = lo + -(-50000 // cyc_tick)
 sl = [int(m.group(1)) for m in re.finditer(r"usleep\(200 ms\): (\d+) ticks", out)]
-need(len(sl) == 3 and all(11 <= t <= 16 for t in sl), "usleep 11..16 ticks: %s" % sl)
+need(len(sl) == 3 and all(lo <= t <= hi for t in sl),
+     "usleep %d..%d ticks: %s" % (lo, hi, sl))
 
 # 4. Signals
 for s in ("signal 10 handled", "blocked task: sem_wait() EINTR",

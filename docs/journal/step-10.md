@@ -173,3 +173,122 @@ time. The CPU is the limit, not memory.
 
 About 6 h. Most of it went on #3: the signal-window bug, then the storm
 test that could show it.
+
+## Gate outcome (Alan, 2026-09-30) and follow-up
+
+Alan's decisions:
+1. **NSH on HWB accepted.** He also wants a flat-only system, 48/16 if
+   need be, and asked whether `sim1802:minimal` can start a minimal NSH.
+2. **ADR 0021 accepted:** prepare it for mainline, keeping 32- and 64-bit
+   compatibility.
+3. **BRS default depth 24.**
+4. **Errata:** leave the tags as they are and add errata notes.
+5. **20 Hz tick**, and make `ps` as fast as possible, through placement
+   and compiler work. About 2–3 s at 4 MHz would be fine.
+
+### 1. Flat profile: not feasible at 48/16 (measured)
+
+Sizes of flat builds on HW48/16 (48 KiB ROM, 16 KiB RAM, no banking):
+
+| Build | ROM | Over 48 KiB by |
+|---|---:|---:|
+| `sim1802:minimal` (hello, no NSH) | 65 585 | 16 436 |
+| + `-minline-compare` (smaller code) | 63 617 | 14 468 |
+| + `CONFIG_DISABLE_ALL_SIGNALS` | 62 878 | 13 728 |
+| + both | 61 569 | 12 420 |
+| + both, `-march=1804` (CDP1804/5/6 instructions) | 59 021 | 9 872 |
+| `sim1802:nsh` built flat (Step 10 feature set) | 134 376 | 85 229 |
+
+Even the flat SIM64 profile (all 64 KiB, ROM and RAM together) cannot
+hold `minimal` any more: it is 570 bytes over.
+
+So `sim1802:minimal` cannot start even a minimal NSH on a flat machine.
+NSH adds about 20–30 KB to `minimal`: the shell and readline (apps
+13–19 KB), plus a console driver (the drivers library, mostly the
+serial upper half, is 12 KB in `sim1802:nsh`). A flat 48 KiB NSH needs
+the code roughly halved. Where the size goes:
+- `minimal` already has `DEFAULT_SMALL`, no pthreads, message queues,
+  environment or POSIX timers;
+- the remainder is spread over the whole kernel. The largest items are
+  `vsprintf` (7.5 KB), the file table (4 KB), 64-bit division (3.5 KB),
+  semaphores and task setup (about 2 KB each);
+- the dominant factor is the 1802's code density under this GCC. With
+  no indexed addressing, loading a 16-bit field through a pointer takes
+  10 instructions and 12 bytes (`glo adi plo ghi adci phi lda phi ldn
+  plo`, seen in `memoutstream_puts`), and 32-bit values need about twice
+  that.
+
+What could make a flat NSH possible, largest effect first:
+- compiler code density (backend work);
+- fixing toolchain issue 0002, which saves about 5.4 KB of the
+  `-fno-split-wide-types` workaround (Step 04);
+- a console without the serial upper half, using `up_putc`/`up_getc`
+  polling;
+- an NSH with only built-in commands.
+
+Even all of that together is not expected to reach 48 KiB. The banked
+profile remains the way to run NSH.
+
+### 2. `fcntl.h` for mainline (prepared, not sent)
+
+- **Patch:** `docs/upstream/0001-include-fcntl.h-keep-open-flags-within-a-16-bit-int.patch`
+  on current apache/nuttx master; branch `upstream/fcntl-16bit-int`.
+- **PR description:** `docs/upstream/fcntl-16bit-int.md`.
+- **Evidence:** `docs/upstream/compare-open-flags.sh` compiles all 28
+  `O_*` constants with the upstream and the patched header.
+  - x86_64, i386 and ARM: identical, so Linux compatibility is kept.
+  - AVR: upstream has `O_DIRECTORY` = `O_NOFOLLOW` = `O_CLOEXEC` = 0 (the
+    bug exists in mainline today); patched, 0x4, 0x10 and 0x8.
+- `arduino-mega2560:nsh` (AVR) and `sim:nsh` build with and without the
+  patch; `sim:nsh` runs.
+- `checkpatch` passes.
+
+### 3–4. BRS default, errata
+
+- `CONFIG_COSMAC_BRS_DEPTH` defaults to 24 for all configurations.
+- Errata notes are at the top of journals step-08 and step-09, and in the
+  README status table.
+
+### 5. Speed
+
+Details and measurements are in ADR 0023, with the ADR 0016, 0013 and
+0009 revisions. In order:
+
+| Change | `ps` (machine cycles) | at 4 MHz |
+|---|---:|---:|
+| `step-10-nsh` | 9 589 392 | 19.2 s |
+| 20 Hz tick | 8 060 728 | 16.1 s |
+| GCC `-minline-calls/-compare/-shifts` (toolchain patch 0002) and the 16-bit division path | 4 399 904 | 8.8 s |
+| `hot` placement: small, widely called functions in fixed ROM | 3 528 620 | 7.1 s |
+| same-bank far-call fast path, procfs formatting in the stdio bank, more hot functions | **3 349 011** | **6.7 s** |
+
+The other commands improved as well: boot to prompt 5.1 → 1.9 s,
+`help` 2.9 → 1.1 s, `free` 8.9 → 2.9 s, `uptime` 3.8 → 1.3 s.
+
+**The 2–3 s target for `ps` is not reached.** 6.7 s is 2.9 times faster
+than at the tag. What remains (ADR 0023, "Consequences"):
+- the compiled code of formatting itself: `vsprintf` and the memory
+  stream's `puts`, about 0.4 M cycles each;
+- the design of `ps`: procfs formats text with `snprintf` and NSH parses
+  it back, which is a third of the time;
+- about 2 000 cycles per character in the console output path;
+- the NCRT return routine.
+
+Getting below 1.5 M cycles needs one of:
+- compiler work on code quality, the largest lever;
+- an NSH `ps` that reads the task list directly, which is an apps change;
+- a faster console path.
+
+Tools added for this work:
+- `scripts/trace-callgraph.py`: inclusive profiles from a trace;
+- `scripts/test-gcc-inline.sh` with `toolchain/tests/inline/gen.py`;
+- `scripts/cycles-per-tick.sh`: tests follow the tick rate;
+- the placement tool's `hot` class and bank capacity check.
+
+Tried and rejected: NSH at `-O2`. It needs 9 banks, and `ps` never
+finishes, most likely wrong code; not investigated.
+
+Regression on the final commits: steps 06, 06b, 07, 08, 09 (ostest exit
+0, 24 tests, 2.51 G cycles at 20 Hz) and 10 pass, as do the GCC inline
+test (10 builds), the banking test and the div64 vectors (648, with and
+without the inline options).

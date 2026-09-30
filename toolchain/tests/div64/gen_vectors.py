@@ -10,6 +10,10 @@ edge = [0, 1, 2, 3, 7, 10, 1000000, 1000000000, 0x7fffffff, 0x80000000,
         0xffffffff, 0x100000000, 0x123456789, 0x7fffffffffffffff,
         0x8000000000000000, 0xffffffffffffffff, 0xfffffffffffffffe]
 pairs = [(a, b) for a in edge for b in edge if b != 0]
+# Around the 16-bit fast path of udivmod64 (both operands < 0x10000)
+edge16 = [0, 1, 7, 10, 0xff, 0x100, 0x7fff, 0x8000, 0xfffe, 0xffff, 0x10000,
+          0x10001, 655350]
+pairs += [(a, b) for a in edge16 for b in edge16 if b != 0]
 for _ in range(220):
     a = random.getrandbits(random.randint(1, 64))
     b = random.getrandbits(random.randint(1, 64)) or 1

@@ -13,6 +13,17 @@ work, and the test script verifies interleaved output. Profile: HWB
 
 **Date:** 2026-09-29. **Executor:** Claude Opus 5.5 (claude-opus-5-5).
 
+> **Erratum (found in Step 10, fixed after `step-09-ostest`).** The signal
+> delivery code in this tag has a bug. A signal delivered to a *running*
+> thread resumes `cosmac_sigdeliver()` with SP at the thread's free byte
+> M(SP), and its first push overwrites that byte. The byte is live for
+> 2–3 instructions inside `cosmac_ncrt_ret`/`cosmac_ncrt_call` and in
+> compiled ALU sequences, so a signal landing there corrupts a return
+> address. This tag's tests pass only because no signal hit that window.
+> The fix (save and restore M(SP) with the frame) and a "signal storm"
+> test that fails without it are in `step-10-nsh`: journal step-10,
+> problem #3; ADR 0017, "Revision at step-10".
+
 ## What was done, in order
 
 1. **Thread-level switch** (`cosmac_doswitch.S`: `cosmac_switchcontext`,

@@ -3,7 +3,8 @@
 # timer.  sim1802:tick (HWB banked profile) replaces the idle loop with a
 # watchdog that re-arms itself every 50 ticks: the tick counter must
 # advance and every period must be exactly 51 ticks (wd_start() adds one
-# tick) = 51 x 10 000 machine cycles (50 Hz tick at the nominal 4 MHz) in
+# tick) = 51 x the cycles of one tick (scripts/cycles-per-tick.sh: 25 000
+# for the 20 Hz tick at the nominal 4 MHz) in
 # simulated time.  Run for both interrupt-state implementations (LSIE and
 # the software IE flag, Kconfig choice) and for the flat SIM64 profile.
 # Also measures the interrupt entry + exit cost from an instruction trace.
@@ -29,11 +30,12 @@ for v in hwb-lsie hwb-swflag sim64-lsie sim64-swflag; do
   grep -q "sp-safety: OK" $b/sp-safety.txt || { cat $b/sp-safety.txt; fail "$v: sp-safety"; }
   out=$(RUN_TIMEOUT=300 scripts/run.sh --max-cycles 60000000 $b/nuttx.elf 2>&1); rc=$?
   [ $rc = 0 ] || { echo "$out"; fail "$v: exit $rc"; }
+  period=$((51 * $(scripts/cycles-per-tick.sh $b/config)))
   for n in 2 3 4 5 6; do
-    grep -q "wdog $n: +51 ticks, +510000 cycles" <<< "$out" \
+    grep -q "wdog $n: +51 ticks, +$period cycles" <<< "$out" \
       || { echo "$out"; fail "$v: watchdog period $n"; }
   done
-  echo "ok: $v: $(grep -c 'wdog' <<< "$out") watchdog callbacks, 51 ticks = 510000 cycles apart;" \
+  echo "ok: $v: $(grep -c 'wdog' <<< "$out") watchdog callbacks, 51 ticks = $period cycles apart;" \
        "$(grep 'timer interrupt' <<< "$out" | sed 's/ticktest: //');" \
        "$(grep 'idle stack' <<< "$out" | sed 's/ticktest: //')"
 done

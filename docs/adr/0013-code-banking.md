@@ -182,6 +182,38 @@ ostest's strings take about 20 KB of the 32 KiB fixed ROM. The
 architecture library, apart from its switching code, and the memory
 manager moved to banks to make room (ADR 0016 keeps the tick path fixed).
 
+## Revision after step-10: hot placement and a same-bank fast path (ADR 0023)
+
+- **`hot` rules.** A `hot` object stays in fixed ROM while there is room,
+  in rule order, and is otherwise placed like `auto`. The tool computes
+  the room from the measuring link: the fixed ROM minus everything that
+  will not be banked, one stub per global function of a banked object,
+  and `--fixed-reserve` (1 024 bytes). `banks.txt` marks small functions
+  called from everywhere as hot:
+  - `memcpy`, `memset`, `strlen`, `strnlen`, `strcmp`, `strncmp`,
+    `strchr`, `isspace`, `lib_isbasedigit`;
+  - the atomics;
+  - the semaphores, `sched_lock`/`sched_unlock`, `nxsched_gettid`,
+    `nxsched_get_tcb`, `nxsched_get_fdlist`;
+  - `mm_lock` and the file table.
+
+  In `sim1802:nsh` all of them fit, and fixed ROM grows from 10.8 to
+  18.0 KB. ostest's fixed ROM is full, so there they are banked.
+- **Same-bank fast path.** When the callee's bank is the selected one,
+  `__cosmac_farcall` leaves the return address and the bank return stack
+  alone, and the callee returns straight to the stub's caller. This covers
+  calls through function pointers within one bank (a stream's `putc`
+  called by `vsprintf`, both in bank 0).
+  - A cross-bank far call costs 421 instead of 398 cycles
+    (`scripts/test-banking.sh`); a same-bank one costs about 200 fewer.
+  - The banking test's `a_apply(a_twice)` is a same-bank call through a
+    pointer, run under a fast timer interrupt.
+- The tool now reports a bank that is over capacity because of explicit
+  bank rules, instead of letting the linker fail with "cannot move
+  location counter backwards".
+- NSH's `ps` made 3 394 far calls before these changes, and 1 636
+  after the hot rules (before the bank-0 procfs rules).
+
 ## How to revisit
 
 If flat HW48/16 becomes feasible (compiler fix), banking can be switched off

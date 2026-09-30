@@ -1,0 +1,103 @@
+From 3c86cd22b0d5cd171f87098a4454388b01122c1b Mon Sep 17 00:00:00 2001
+From: Alan Carvalho de Assis <acassis@gmail.com>
+Date: Tue, 29 Sep 2026 21:21:29 -0300
+Subject: [PATCH] include/fcntl.h: keep open() flags within a 16-bit int
+
+O_DIRECTORY, O_NOFOLLOW, O_NOATIME, O_CLOEXEC, __O_SYNC, O_PATH and
+__O_TMPFILE are defined as shifts by 16 to 22 bits.  Where int is 16
+bits (AVR, for example), these shifts exceed the width of the type:
+GCC evaluates them to 0, and the -Wshift-count-overflow warning is not
+shown because include/ is a system include directory.  The oflags
+argument of open() is an int, so it could not carry those bits anyway.
+
+As a result, on 16-bit targets opendir() opens directories without
+O_DIRECTORY, so opening a mount point such as /proc fails with ENOENT,
+and O_CLOEXEC and O_NOFOLLOW have no effect.
+
+When UINT_MAX is 0xffff, use the unused bits 2 to 4 for O_DIRECTORY,
+O_CLOEXEC and O_NOFOLLOW, define O_NOATIME and __O_SYNC as 0 (O_SYNC
+falls back to O_DSYNC), and leave O_PATH and O_TMPFILE undefined, so
+that code which needs them fails to build instead of silently opening
+with the wrong flags; nothing in the tree uses them.  _O_MAXBIT becomes
+15.
+
+Where int is 32 bits or wider nothing changes: the values of all open
+flags are identical to before on x86_64, i386 and ARM (compared with a
+program that prints every O_* constant), so Linux compatibility is kept.
+
+Signed-off-by: Alan Carvalho de Assis <acassis@gmail.com>
+Generated-by: Claude Opus 5.5 (claude-opus-5-5) via Claude Code
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ include/fcntl.h | 38 +++++++++++++++++++++++++++++---------
+ 1 file changed, 29 insertions(+), 9 deletions(-)
+
+diff --git a/include/fcntl.h b/include/fcntl.h
+index 05f2ade718..8cd50c6eed 100644
+--- a/include/fcntl.h
++++ b/include/fcntl.h
+@@ -30,6 +30,7 @@
+ #include <nuttx/config.h>
+ 
+ #include <sys/types.h>
++#include <limits.h>
+ #include <stdint.h>
+ 
+ /****************************************************************************
+@@ -59,25 +60,44 @@
+ #define O_ASYNC      (1U << 13)      /* Enable signal-driven I/O */
+ #define O_DIRECT     (1U << 14)      /* Avoid caching, write directly to hardware */
+ #define O_LARGEFILE  (1U << 15)      /* Large File */
+-#define O_DIRECTORY  (1U << 16)      /* Must be a directory */
+-#define O_NOFOLLOW   (1U << 17)      /* Don't follow links */
+-#define O_NOATIME    (1U << 18)      /* Don't update the file last access time */
+-#define O_CLOEXEC    (1U << 19)      /* Close on execute */
+-#define __O_SYNC     (1U << 20)      /* Synchronize file (data+metadata) */
+-#define O_PATH       (1U << 21)      /* Obtain a path-only fd (no I/O) */
+-#define __O_TMPFILE  (1U << 22)      /* Create an unnamed temporary file */
++
++#if UINT_MAX > 0xffff
++#  define O_DIRECTORY  (1U << 16)    /* Must be a directory */
++#  define O_NOFOLLOW   (1U << 17)    /* Don't follow links */
++#  define O_NOATIME    (1U << 18)    /* Don't update the file last access time */
++#  define O_CLOEXEC    (1U << 19)    /* Close on execute */
++#  define __O_SYNC     (1U << 20)    /* Synchronize file (data+metadata) */
++#  define O_PATH       (1U << 21)    /* Obtain a path-only fd (no I/O) */
++#  define __O_TMPFILE  (1U << 22)    /* Create an unnamed temporary file */
++#  define O_TMPFILE    (__O_TMPFILE | O_DIRECTORY)
++#else
++/* With a 16-bit int, the oflags argument of open() holds bits 0-15 only.
++ * The flags that the VFS and the C library act on use the free bits 2-4.
++ * O_NOATIME is only a hint and O_SYNC falls back to O_DSYNC; O_PATH and
++ * O_TMPFILE are not available.
++ */
++
++#  define O_DIRECTORY  (1U << 2)     /* Must be a directory */
++#  define O_CLOEXEC    (1U << 3)     /* Close on execute */
++#  define O_NOFOLLOW   (1U << 4)     /* Don't follow links */
++#  define O_NOATIME    0             /* Not supported */
++#  define __O_SYNC     0             /* Not supported: O_SYNC is O_DSYNC */
++#endif
+ 
+ #define O_NDELAY     O_NONBLOCK                  /* Synonym for O_NONBLOCK */
+ #define O_SYNC       (__O_SYNC | O_DSYNC)        /* Synchronize output on write */
+ #define O_RSYNC      O_SYNC                      /* Synchronize input on read */
+-#define O_TMPFILE    (__O_TMPFILE | O_DIRECTORY) /* Create a temporary file */
+ #define O_BINARY     0                           /* Open the file in binary mode */
+ 
+ /* This is the highest bit number used in the open flags bitset.  Bits above
+  * this bit number may be used within NuttX for other, internal purposes.
+  */
+ 
+-#define _O_MAXBIT   22
++#if UINT_MAX > 0xffff
++#  define _O_MAXBIT   22
++#else
++#  define _O_MAXBIT   15
++#endif
+ 
+ /* Synonyms historically used as F_SETFL flags (BSD). */
+ 
+-- 
+2.43.0
+

@@ -10,6 +10,12 @@ Profile: HWB (banked).
 
 **Date:** 2026-09-29. **Executor:** Claude Opus 5.5 (claude-opus-5-5).
 
+> **Erratum (found in Step 10, fixed after this tag).** This tag contains
+> the Step 08 signal-delivery bug described in the erratum at the top of
+> journal step-08 (a signal in a 2–3-instruction window of the NCRT
+> routines corrupts a return address). ostest passed without hitting the
+> window. The fix is in `step-10-nsh`.
+
 ## What was done, in order
 
 1. **Serial driver** (`boards/.../sim1802_serial.c`, `CONFIG_SIM1802_UART0`,

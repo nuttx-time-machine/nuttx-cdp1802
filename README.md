@@ -22,9 +22,9 @@ It has two goals of equal weight (see [`CONTRACT.md`](CONTRACT.md)):
 | 06 | `step-06-boot` | Boot from the raw ROM image to the idle loop (SIM64) | done |
 | 06b | `step-06b-banking` | Code banking: bank window, trampoline, placement tool, HWB profile (ADR 0013) | done |
 | 07 | `step-07-irq-timer` | Interrupts and the 50 Hz system tick (HWB), LSIE or RAM-copy IE | done |
-| 08 | `step-08-context` | Context switching, stacks, task exit, signals (HWB); H5 validated (311 cycles) | done |
-| 09 | `step-09-ostest` | Serial driver; ostest passes (HWB, virtual 64 MHz clock, ADR 0020) | done |
-| 10 | `step-10-nsh` | NSH with help, ps, free, uptime on HWB (**GATE**); fixes: open flags on 16-bit int (ADR 0021), BRS overflow, signal free byte (Step 08 bug) | done — awaiting Alan's gate decision (journal step-10) |
+| 08 | `step-08-context` | Context switching, stacks, task exit, signals (HWB); H5 validated (311 cycles) | done — **erratum:** signal-delivery bug fixed in `step-10-nsh` (journal step-08) |
+| 09 | `step-09-ostest` | Serial driver; ostest passes (HWB, virtual 64 MHz clock, ADR 0020) | done — **erratum:** contains the Step 08 signal bug, fixed in `step-10-nsh` |
+| 10 | `step-10-nsh` | NSH with help, ps, free, uptime on HWB (**GATE**); fixes: open flags on 16-bit int (ADR 0021), BRS overflow, signal free byte (Step 08 bug) | done — gate decided by Alan (journal step-10): NSH on HWB accepted, flat 48/16 NSH measured infeasible, 20 Hz tick, speed work (`ps` 19.2 → 6.7 s, ADR 0023), `fcntl.h` patch prepared for mainline (`docs/upstream/`) |
 | 11 | — | CI, final docs, upstream-readiness report | — |
 
 ## Reproduce

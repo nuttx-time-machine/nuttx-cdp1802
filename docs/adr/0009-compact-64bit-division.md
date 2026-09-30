@@ -38,6 +38,16 @@ in 32 bits. Verified against 492 host-computed vectors
   cost is measured in Step 07/08.
 - The helpers are the case that exposed toolchain issue 0002.
 
+## Revision after step-10: 16-bit fast path
+
+printf's `__ultoa_invert()` divides in `unsigned long long` for every
+digit: one `%` and one `/` per digit, each a 64-bit division. When both
+operands fit in 16 bits, `udivmod64` now uses the 16-bit division. The
+32-bit path is kept. The operands' high parts are tested through a
+big-endian union instead of with 64-bit shifts, which are library calls on
+this CPU. The vector test gained 16-bit boundary cases, 648 vectors in
+all, and passes with and without the inline code options (ADR 0023).
+
 ## How to revisit
 
 If libgcc gains a compact implementation, drop the file. If division shows
